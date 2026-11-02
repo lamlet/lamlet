@@ -52,7 +52,8 @@ makes them statically available (spec §5).
 | Pattern macros with hygiene and budgets | Implemented and tested |
 | Deterministic math, hash | Implemented and tested (bits pinned) |
 | CLI (`check`/`prepare`/`eval`/`call`/`batch`) | Implemented and tested |
-| Procedural macros, portable artifacts, benchmark suite, multiple diagnostics, mutual recursion, abstract types | Not implemented |
+| Benchmarks (`crates/lamlet/benches/embed.rs`, `cargo bench -p lamlet --bench embed`) | Implemented; CI gates linear scaling and instruction counts |
+| Procedural macros, portable artifacts, multiple diagnostics, mutual recursion, abstract types | Not implemented |
 
 ## Tests
 

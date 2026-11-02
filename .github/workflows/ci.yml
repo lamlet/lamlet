@@ -25,6 +25,8 @@ jobs:
           for example in host_text host_build_check host_curve host_threads; do
             cargo run --locked -q -p lamlet --example "$example" > /dev/null
           done
+      - name: Benchmark gate (linear scaling, instruction counts; timings are printed, not gated)
+        run: cargo bench --locked -p lamlet --bench embed -- --gate
       - name: Clippy
         run: cargo clippy --workspace --all-targets --locked
       - name: Docs

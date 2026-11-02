@@ -257,6 +257,27 @@ fixture carries its expected code.
 
 ## Phase 5: speed and caching
 
+**Status: benchmarks implemented (2026-11-01); artifacts not started.** `crates/lamlet/benches/embed.rs` runs
+with `cargo bench -p lamlet --bench embed`. With `-- --gate`, which CI runs, it fails when checking or evaluation
+scales worse than linearly (more than 2.6× for twice the document), or when the deterministic instruction counts
+grow (13 for one `ease` call, 28,000,032 for a fold over 10⁶ elements). Timings are printed and never gated,
+because shared CI machines are too noisy for them.
+
+First measurements (release build, AMD Ryzen AI 9 HX 370, minimum of repeated runs), to compare phase 2 against:
+
+| Workload | Time |
+|---|---|
+| Check `$[Import* std]` alone | 1.1 ms |
+| Check 1,000 lines with 200 regions | 2.1 ms |
+| Check 2,000 lines with 400 regions | 3.1 ms |
+| New instance, evaluate, and render the 1,000-line document | 59 µs |
+| One call of a small Float curve (`call_typed`) | 175 ns |
+| Fold over 10⁶ elements | 325 ms (87 M instructions/s) |
+
+**A finding: `std` is checked again for every document.** It is about half of the time spent on a 1,000-line
+document, and nearly all of it for a small one. Caching checked packages in the `Engine`, keyed by package
+source and version, is the cheapest speedup available. It is simpler than full artifacts, and should come first.
+
 - **Compiled artifacts.** A versioned binary format for a checked `Program` plus its static values and spans,
   keyed by the existing fingerprint (source, dependencies, language and bytecode versions, native metadata), so a
   host loads a prepared document without rechecking. Verification on load (exists for bytecode). The format is

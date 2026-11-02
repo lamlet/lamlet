@@ -26,6 +26,8 @@ bytecode version (`BYTECODE_VERSION`) are tracked separately from the crate vers
   marked unusable. `Data` conversions refuse values nested deeper than the type limit.
 - `docs/embedding.md`, a guide to `lamlet::embed`, and four example hosts in `crates/lamlet/examples/` (`host_text`,
   `host_build_check`, `host_curve`, `host_threads`) that CI runs.
+- Benchmarks (`cargo bench -p lamlet --bench embed`), with no dependencies. With `-- --gate`, which CI runs, they
+  check that checking and evaluation scale linearly and that fixed workloads take no more VM instructions.
 - An in-tree fuzzer (`crates/lamlet/tests/fuzz.rs`) and hostile-input tests (`crates/lamlet/tests/limits.rs`).
 - `check_source` and `SourceFile::with_origin`: diagnostics can point into a larger host file.
 - Continuous integration: tests, clippy, rustdoc, and a check that the `lamlet` library has no dependencies.
