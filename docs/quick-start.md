@@ -11,16 +11,19 @@ variants, explicit compile-time evaluation, and hygienic macros, embedded in ord
 
 ```sh
 cargo build --release
+./target/release/lamlet file.lam          # run it: print the text, each region replaced by its value
+./target/release/lamlet build file.lam -o file.md   # compile to Markdown, HTML, JSON, or speech (documents.md)
 ./target/release/lamlet eval file.lam     # check, then evaluate; JSON results on stdout
 ./target/release/lamlet check file.lam    # types and stages only
 cargo run -q -p lamlet --example run -- file.lam   # plain one-line-per-result output
 ```
 
-A Lamlet file is a **document**. Only `$`-prefixed regions are code; everything else is prose that the
-language ignores:
+A Lamlet file is a **document**. Only `$`-prefixed regions are code; everything else is text, printed as
+written. `lamlet file.lam` prints this one as `This sentence is text.` and `The answer is 3.` (the import's
+line disappears):
 
 ```text
-This sentence is prose and is ignored.
+This sentence is text.
 $[Import* std]
 The answer is ${+ 1 2}.
 ```

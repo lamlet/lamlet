@@ -13,6 +13,19 @@ bytecode version (`BYTECODE_VERSION`) are tracked separately from the crate vers
 
 ### Added
 
+- `lamlet FILE` (also `lamlet run FILE`) runs a document from top to bottom and prints it: its text as written,
+  each expression region replaced by its value, and declarations removed with their lines.
+- `lamlet-doc`, a new crate with no dependencies but `lamlet`: documents lowered to a format-neutral IR (`Doc`,
+  `Block`, `Inline`), and backends from it to plain text, Markdown, HTML, JSON (the IR itself), and speech
+  (utterances with anchors between words, and a translation alignment check). `lamlet FILE` goes through it,
+  with the same output as before on every fixture and example (`plans/formats.md`).
+- The `content` package (always available in the CLI, `lamlet_doc::CONTENT_SOURCE` for hosts): emphasis, links,
+  images, code, formulas, headings, lists, tables, code blocks, named spans and groups, raw markup, and speech
+  cues (`say`, `anchor`, `pause`), as typed values.
+- `lamlet build FILE [-o OUT] [--to text|md|html|ir|speech]`: the format from `--to` or the extension of `OUT`.
+  `--prose commonmark` parses prose as CommonMark (a subset), so one source builds to every format;
+  `--standalone` writes an HTML page, `--prepared` the IR without evaluating, and `--align` checks a translation
+  against its original.
 - `lamlet::embed`, the embedding surface for host programs: `Engine`, `SourceFile` (with a position in a host
   file), `Document::parts`/`render`/`render_with`/`binding`, `Instance` with persistent inputs and typed calls
   (`call_typed`), one `Error` type, `IntoLamlet`/`FromLamlet` conversions, and `Data`, a plain `Send + Sync`

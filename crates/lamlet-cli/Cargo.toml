@@ -11,4 +11,5 @@ doc = false
 
 [dependencies]
 lamlet = { path = "../lamlet" }
+lamlet-doc = { path = "../lamlet-doc" }
 serde_json = "1"

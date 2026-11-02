@@ -1,0 +1,35 @@
+$[Import* std]$[Import* content]
+$[# n 3]
+# The garden {#garden kind=3d}
+
+A *small* garden with **$n** beds and `code ${+ 1 1}`, see [the plan](https://example.com) or <https://lamlet.dev>.
+A second line,  
+after a hard break.
+
+${table {' "Bed" "Plant"} {' {' "1" "rose"} {' "2" "fern"}}}
+
+- one
+- two with ${emph "value"}
+  continued
+  - nested
+
+1. first
+2. second
+
+```lam
+$$[# x 1]
+```
+
+## Next {#next}
+
+Spoken ${say {code "K::fold"} "fold"} and a cue${anchor "m0" {'}} here.
+
+### Values and special nodes {#values}
+
+A list ${' 1 2}, a record ${. x 1.0 y 2.5}, ${some 3}, a function $map, and escapes: ${text "a <b> & *c* | d"}.
+An image ${imageTitled "a.png" "Alt *text*" "A \"title\""}, ${say {displayMath "\\frac{1}{2}"} "one half"}, ${strongOf {cat {' {text "bold "} {emph "and"}}}},
+a ${span "cue" {' {attr "mix" "0..1"}} {text "spanned part"}} and$lineBreak a break.
+
+${group "aside" {' {attr "tone" "quiet"}} {paragraph {text "Inside a group."}}}
+
+${numbered {' {text "item one"} {cat {' {paragraph {text "item two"}} {codeBlock "" "two ```"}}}}}

@@ -37,3 +37,7 @@ jobs:
         run: |
           deps=$(cargo tree -p lamlet --edges normal,build --prefix none | tail -n +2)
           if [ -n "$deps" ]; then echo "lamlet must not depend on:"; echo "$deps"; exit 1; fi
+      - name: lamlet-doc depends only on lamlet
+        run: |
+          deps=$(cargo tree -p lamlet-doc --edges normal,build --prefix none | tail -n +2 | grep -v '^lamlet v' || true)
+          if [ -n "$deps" ]; then echo "lamlet-doc must depend only on lamlet, not on:"; echo "$deps"; exit 1; fi

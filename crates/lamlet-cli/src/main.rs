@@ -1,6 +1,7 @@
-//! `lamlet` command-line interface: check, prepare, eval, and a batch JSON protocol.
+//! `lamlet` command-line interface: run a document, or check, prepare, eval, and a batch JSON protocol.
 //!
-//! stdout carries only the structured JSON response; rendered diagnostics go to stderr.
+//! `lamlet FILE` (or `lamlet run FILE`) prints the document: its text as written, each region replaced by its
+//! value. The other commands print only a structured JSON response on stdout. Rendered diagnostics go to stderr.
 //! Exit status: 0 success, 1 language diagnostics (syntax/type/stage/static/runtime/limit), 2 usage or I/O error.
 
 use lamlet::check::RegionInfo;
@@ -15,11 +16,26 @@ use std::rc::Rc;
 const PROTOCOL_VERSION: u64 = 1;
 
 const USAGE: &str = "usage:
+  lamlet FILE    [--package NAME=PATH]... [--input KEY=JSON]... [--max-instructions N]
+  lamlet run     FILE (the same)
+  lamlet build   FILE [-o OUT] [--to FORMAT] [--prose FORMAT] [--standalone] [--prepared] [--align ORIGINAL]
+                 [--package NAME=PATH]... [--input KEY=JSON]...
   lamlet check   FILE [--package NAME=PATH]... [--require-linked]
   lamlet prepare FILE [--package NAME=PATH]...
   lamlet eval    FILE [--package NAME=PATH]... [--input KEY=JSON]... [--max-instructions N]
   lamlet call    FILE FUNCTION [JSON_ARG]... [--package NAME=PATH]... [--input KEY=JSON]...
   lamlet batch   < request.json
+
+`lamlet FILE` runs the document from top to bottom and prints it: text as written, each `${...}` or `$name`
+replaced by its value, and declarations (`$[# ...]`, imports) removed with their lines.
+
+`build` compiles the document to another format through Lamlet's document IR (lamlet-doc). FORMAT is
+`text`, `md`, `html`, `ir` (the IR as JSON), or `speech` (utterances as JSON); without --to it comes from the
+extension of OUT, and is `text` without either. Prose is copied as markup of the output format, or with
+--prose commonmark parsed as CommonMark (a subset) so one source builds to every format. --standalone makes an
+HTML page; --prepared writes the IR without evaluating (runtime regions are holes); --align checks a
+translation's speech against its ORIGINAL. The `content` package (images, links, tables, ...) is always
+available.
 
 `call` evaluates a statically available top-level function of FILE with JSON arguments, converted using the
 function's parameter types (numbers, strings, booleans, null for Unit, arrays for lists, objects for records).
@@ -41,6 +57,18 @@ struct Request {
     max_instructions: Option<u64>,
     /// Unix timestamp snapshot for `std.time`, read once per invocation.
     time: i64,
+    build: Build,
+}
+
+/// Options of `build`.
+#[derive(Default)]
+struct Build {
+    to: Option<String>,
+    out: Option<String>,
+    prose: Option<String>,
+    standalone: bool,
+    prepared: bool,
+    align: Option<String>,
 }
 
 fn main() {
@@ -52,23 +80,37 @@ fn main() {
             std::process::exit(2);
         }
     };
+    if req.command == "run" || req.command == "build" {
+        std::process::exit(build(&req));
+    }
     let (response, ok) = run(&req);
     println!("{}", serde_json::to_string_pretty(&response).unwrap());
     std::process::exit(if ok { 0 } else { 1 });
 }
 
+const COMMANDS: &[&str] = &["run", "build", "check", "prepare", "eval", "call", "batch"];
+
 fn parse_args(args: &[String]) -> Result<Request, String> {
-    let command = args.first().ok_or("missing command")?.clone();
+    let first = args.first().ok_or("missing command")?;
+    // `lamlet FILE` is `lamlet run FILE`.
+    let run_args;
+    let args = if COMMANDS.contains(&first.as_str()) || first.starts_with('-') {
+        args
+    } else {
+        run_args = [vec!["run".to_string()], args.to_vec()].concat();
+        &run_args[..]
+    };
+    let command = args[0].clone();
     if command == "batch" {
         let mut text = String::new();
         std::io::stdin().read_to_string(&mut text).map_err(|e| format!("reading stdin: {}", e))?;
         return parse_batch(&text);
     }
-    if !matches!(command.as_str(), "check" | "prepare" | "eval" | "call") {
+    if !matches!(command.as_str(), "run" | "build" | "check" | "prepare" | "eval" | "call") {
         return Err(format!("unknown command `{}`", command));
     }
     let mut positional: Vec<String> = Vec::new();
-    let mut req = Request { command, documents: vec![], packages: vec![], inputs: vec![], require_linked: false, max_instructions: None, time: now() };
+    let mut req = Request { command, documents: vec![], packages: vec![], inputs: vec![], require_linked: false, max_instructions: None, time: now(), build: Build::default() };
     let mut i = 1;
     while i < args.len() {
         let a = &args[i];
@@ -90,6 +132,12 @@ fn parse_args(args: &[String]) -> Result<Request, String> {
                 req.inputs.push((k.into(), json_to_value(&j)?));
             }
             "--require-linked" => req.require_linked = true,
+            "-o" | "--out" => req.build.out = Some(value()?),
+            "--to" => req.build.to = Some(value()?),
+            "--prose" => req.build.prose = Some(value()?),
+            "--align" => req.build.align = Some(value()?),
+            "--standalone" => req.build.standalone = true,
+            "--prepared" => req.build.prepared = true,
             "--max-instructions" => req.max_instructions = Some(value()?.parse().map_err(|_| "--max-instructions expects an integer")?),
             arg if !arg.starts_with("--") => positional.push(arg.to_string()),
             other => return Err(format!("unknown option `{}`", other)),
@@ -167,6 +215,7 @@ fn parse_batch(text: &str) -> Result<Request, String> {
         require_linked: j.get("require_linked").and_then(Json::as_bool).unwrap_or(false),
         max_instructions: j.get("max_instructions").and_then(Json::as_u64),
         time: now(),
+        build: Build::default(),
     })
 }
 
@@ -174,12 +223,138 @@ fn now() -> i64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
 }
 
-fn run(req: &Request) -> (Json, bool) {
-    let mut resolver = MemoryResolver::new();
+/// A resolver with the `content` package and the request's packages (which may replace it).
+fn resolver(req: &Request) -> MemoryResolver {
+    let mut resolver = lamlet_doc::resolver();
     for p in &req.packages {
         resolver.add_package(p.clone());
     }
-    let resolver: Rc<dyn Resolver> = Rc::new(resolver);
+    resolver
+}
+
+/// The output format of `build`: `--to`, else the extension of `-o`, else plain text.
+fn target(b: &Build) -> Result<String, String> {
+    if let Some(t) = &b.to {
+        return match t.as_str() {
+            "text" | "md" | "html" | "ir" | "speech" => Ok(t.clone()),
+            "markdown" => Ok("md".into()),
+            "json" => Ok("ir".into()),
+            other => Err(format!("unknown format `{}`: it is text, md, html, ir, or speech", other)),
+        };
+    }
+    let Some(out) = &b.out else { return Ok("text".into()) };
+    let ext = std::path::Path::new(out).extension().and_then(|e| e.to_str()).unwrap_or("");
+    match ext {
+        "txt" | "text" => Ok("text".into()),
+        "md" | "markdown" => Ok("md".into()),
+        "html" | "htm" => Ok("html".into()),
+        "json" => Ok("ir".into()),
+        _ => Err(format!("cannot tell the format of `{}` from its extension: give --to", out)),
+    }
+}
+
+/// Check, evaluate, and lower one document to the IR.
+fn lower_file(req: &Request, name: &str, source: &str, prose: &str) -> Result<lamlet_doc::Doc, lamlet_doc::Error> {
+    use lamlet::embed;
+    let mut engine = embed::Engine::new();
+    engine.set_resolver(resolver(req));
+    let doc = engine.check(embed::SourceFile::new(name, source))?;
+    if req.build.prepared {
+        return lamlet_doc::lower_prepared(&doc, prose);
+    }
+    let mut instance = engine.instance(&doc)?;
+    instance.set_time(req.time);
+    for (k, v) in &req.inputs {
+        instance.set_input(k, v.clone())?;
+    }
+    if let Some(n) = req.max_instructions {
+        instance.set_limits(Limits { max_instructions: n, ..Limits::default() });
+    }
+    lamlet_doc::evaluate_and_lower(&doc, &mut instance, prose)
+}
+
+/// `lamlet FILE` and `lamlet build FILE`: frontend, lowering to the IR, then a backend. Returns the exit status.
+fn build(req: &Request) -> i32 {
+    use lamlet_doc::backend;
+    let (name, source, _) = &req.documents[0];
+    let b = &req.build;
+    let usage = |m: String| {
+        eprintln!("lamlet: {}", m);
+        2
+    };
+    if req.command == "run" && (b.to.is_some() || b.out.is_some() || b.prose.is_some() || b.standalone || b.prepared || b.align.is_some()) {
+        return usage("output options are for `lamlet build`".into());
+    }
+    let to = match target(b) {
+        Ok(t) => t,
+        Err(m) => return usage(m),
+    };
+    let prose = b.prose.clone().unwrap_or_else(|| match to.as_str() {
+        "md" | "html" => to.clone(),
+        _ => lamlet_doc::TEXT.to_string(),
+    });
+    if !matches!(prose.as_str(), "text" | "md" | "html" | "commonmark") {
+        return usage(format!("unknown prose format `{}`: it is text, md, html, or commonmark", prose));
+    }
+    if b.prepared && to != "ir" {
+        return usage("--prepared writes the IR: use it with --to ir".into());
+    }
+    if b.standalone && to != "html" {
+        return usage("--standalone is for --to html".into());
+    }
+    if b.align.is_some() && to != "speech" {
+        return usage("--align is for --to speech".into());
+    }
+    let result = (|| -> Result<String, lamlet_doc::Error> {
+        let ir = lower_file(req, name, source, &prose)?;
+        match to.as_str() {
+            "md" => backend::markdown::write(&ir),
+            "html" if b.standalone => {
+                let body = backend::html::write(&ir)?;
+                let stem = std::path::Path::new(name).file_stem().and_then(|s| s.to_str()).unwrap_or(name).to_string();
+                Ok(backend::html::standalone(&body, &backend::html::first_heading(&ir).unwrap_or(stem)))
+            }
+            "html" => backend::html::write(&ir),
+            "ir" => backend::json::write(&ir),
+            "speech" => {
+                let utterances = backend::speech::utterances(&ir)?;
+                if let Some(original) = &b.align {
+                    let text = std::fs::read_to_string(original).map_err(|e| lamlet_doc::Error::Doc { message: format!("reading {}: {}", original, e), at: None })?;
+                    let theirs = backend::speech::utterances(&lower_file(req, original, &text, &prose)?)?;
+                    backend::speech::align(&theirs, &utterances)?;
+                }
+                Ok(backend::speech::to_json(&utterances))
+            }
+            _ => backend::text::write(&ir),
+        }
+    })();
+    // Parsed prose ends where its last block ends; files end with a line break.
+    let result = result.map(|mut t| {
+        if prose == lamlet_doc::COMMONMARK && !t.is_empty() && !t.ends_with('\n') {
+            t.push('\n');
+        }
+        t
+    });
+    match result {
+        Ok(text) => match &b.out {
+            Some(path) => match std::fs::write(path, text) {
+                Ok(()) => 0,
+                Err(e) => usage(format!("writing {}: {}", path, e)),
+            },
+            None => {
+                print!("{}", text);
+                0
+            }
+        },
+        Err(e) => {
+            eprintln!("{}", e.render());
+            1
+        }
+    }
+}
+
+fn run(req: &Request) -> (Json, bool) {
+    let resolver: Rc<dyn Resolver> = Rc::new(resolver(req));
     let natives = Rc::new(NativeRegistry::new());
     let options = Options { require_linked: req.require_linked, ..Options::default() };
     let mut all_ok = true;

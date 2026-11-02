@@ -43,6 +43,8 @@ is an ordinary value with an ordinary type, so wrapping or passing a primitive n
 
 ```sh
 cargo build --release
+./target/release/lamlet examples/hello.lam           # run it: the text, with each region's value filled in
+./target/release/lamlet build page.lam -o page.md    # compile to Markdown, HTML, JSON, or speech (docs/documents.md)
 ./target/release/lamlet eval examples/hello.lam      # JSON results on stdout
 ./target/release/lamlet prepare examples/hello.lam   # text, prepared values, and residual runtime regions
 ./target/release/lamlet check examples/hello.lam     # types and stages without running runtime code

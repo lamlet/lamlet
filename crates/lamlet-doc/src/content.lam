@@ -1,0 +1,143 @@
+The `content` package: portable document content
+=================================================
+
+A region whose value is `Content` becomes structure in the output: emphasis, links, images, tables, code. Each
+backend writes it in its own syntax (`lamlet build`). Content is a flat list of events, so Lamlet code can build,
+join, and transform it with ordinary list functions; the Rust side turns the events into a tree and checks that
+every opening has its closing.
+
+$[Import* std]
+
+1. Types
+
+An attribute of an element: a key and its value as text.
+
+$[# Attr [% {Struct {' {Field "key" String} {Field "value" String}}}]]
+
+An element's name and attributes.
+
+$[# Element [% {Struct {' {Field "name" String} {Field "attrs" {List Attr}}}}]]
+
+One event: the opening of an element, its closing (by name), text, or a leaf element with no children.
+
+$[# Event [% {Variant {' {Field "open" Element} {Field "close" String} {Field "text" String} {Field "leaf" Element}}}]]
+
+Content: a list of events. Lists of content join with `cat` (or std's `flatten`).
+
+$[# Content [% {List Event}]]
+
+2. Building blocks
+
+$[# attr {^ {key value} {: {. key key value value} Attr}}]
+$[# _el {^ {name attrs} {: {. name name attrs attrs} Element}}]
+$[# _open {^ {name attrs} {: {#open {_el name attrs}} Event}}]
+$[# _close {^ {name} {: {#close name} Event}}]
+$[# _wrap {^ {name attrs body} {: {flatten {' {' {_open name attrs}} body {' {_close name}}}} Content}}]
+$[# _leaf {^ {name attrs} {: {' {: {#leaf {_el name attrs}} Event}} Content}}]
+
+Content from pieces of content, in order.
+
+$[# cat {^ {parts} {: {flatten parts} Content}}]
+
+Nothing.
+
+$[# empty [% {: {'} Content}]]
+
+3. Inlines
+
+Text. Writers escape it for their format.
+
+$[# text {^ {s} {: {' {: {#text s} Event}} Content}}]
+
+Emphasis and strong emphasis, of a String or of content.
+
+$[# emph {^ {s} {_wrap "emph" {'} {text s}}}]
+$[# emphOf {^ {body} {_wrap "emph" {'} body}}]
+$[# strong {^ {s} {_wrap "strong" {'} {text s}}}]
+$[# strongOf {^ {body} {_wrap "strong" {'} body}}]
+
+A link with a String label, or with content.
+
+$[# link {^ {label href} {_wrap "link" {' {attr "href" href}} {text label}}}]
+$[# linkOf {^ {body href} {_wrap "link" {' {attr "href" href}} body}}]
+
+An image, with its alternative text, and optionally a title.
+
+$[# image {^ {src alt} {_leaf "image" {' {attr "src" src} {attr "alt" alt}}}}]
+$[# imageTitled {^ {src alt title} {_leaf "image" {' {attr "src" src} {attr "alt" alt} {attr "title" title}}}}]
+
+Code inside a line.
+
+$[# code {^ {s} {_leaf "code" {' {attr "text" s}}}}]
+
+A formula in TeX, inline or displayed.
+
+$[# math {^ {tex} {_leaf "math" {' {attr "tex" tex}}}}]
+$[# displayMath {^ {tex} {_leaf "math" {' {attr "tex" tex} {attr "display" "true"}}}}]
+
+A line break.
+
+$[# lineBreak [% {_leaf "break" {'}}]]
+
+Markup for one format, copied unescaped by that format's backend and refused by the others: inline, or as a
+block.
+
+$[# raw {^ {format s} {_leaf "raw" {' {attr "format" format} {attr "text" s}}}}]
+$[# rawBlock {^ {format s} {_leaf "rawBlock" {' {attr "format" format} {attr "text" s}}}}]
+
+A named span with attributes, for hosts: a class in HTML, a cue for a narrated document. Writers that do not know
+the name write only its content.
+
+$[# span {^ {name attrs body} {_wrap "span" {cons {attr "name" name} attrs} body}}]
+
+4. Blocks
+
+A paragraph.
+
+$[# paragraph {^ {body} {_wrap "paragraph" {'} body}}]
+
+A heading of level 1 to 6, from a String; `headingId` also gives it an id (a speech section, an HTML anchor).
+
+$[# heading {^ {level s} {_wrap "heading" {' {attr "level" {str level}}} {text s}}}]
+$[# headingId {^ {level id s} {_wrap "heading" {' {attr "level" {str level}} {attr "id" id}} {text s}}}]
+$[# headingOf {^ {level id body} {_wrap "heading" {' {attr "level" {str level}} {attr "id" id}} body}}]
+
+Lists of items, each item content.
+
+$[# _items {^ {items} {flatten {map items {^ {c} {_wrap "item" {'} c}}}}}]
+$[# bullets {^ {items} {_wrap "list" {'} {_items items}}}]
+$[# numbered {^ {items} {_wrap "list" {' {attr "ordered" "true"}} {_items items}}}]
+
+Lists of Strings, as bullets or numbered.
+
+$[# bulletsOf {^ {items} {bullets {map items text}}}]
+$[# numberedOf {^ {items} {numbered {map items text}}}]
+
+A table from a header row and rows of Strings, or of content.
+
+$[# _cells {^ {row} {flatten {map row {^ {c} {_wrap "cell" {'} c}}}}}]
+$[# tableOf {^ {header rows}
+    {_wrap "table" {'} {flatten {cons {_wrap "head" {'} {_cells header}} {map rows {^ {r} {_wrap "row" {'} {_cells r}}}}}}}}]
+$[# table {^ {header rows} {tableOf {map header text} {map rows {^ {r} {map r text}}}}}]
+
+A block of code in a language (`""` for none).
+
+$[# codeBlock {^ {lang s} {_leaf "codeBlock" {' {attr "lang" lang} {attr "text" s}}}}]
+
+A named group of blocks with attributes, for hosts, like `span` for inlines.
+
+$[# group {^ {name attrs body} {_wrap "group" {cons {attr "name" name} attrs} body}}]
+
+5. Speech
+
+Shown as `shown` and spoken as `spoken`: a formula, a code name, an abbreviation.
+
+$[# say {^ {shown spoken} {_wrap "say" {' {attr "spoken" spoken}} shown}}]
+
+A named point between words, with attributes, that a speech host times to the next spoken word.
+
+$[# anchor {^ {name attrs} {_leaf "anchor" {cons {attr "name" name} attrs}}}]
+
+Silence, in seconds.
+
+$[# pause {^ {seconds} {_leaf "pause" {' {attr "seconds" {str seconds}}}}}]

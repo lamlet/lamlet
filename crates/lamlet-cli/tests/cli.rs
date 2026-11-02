@@ -82,6 +82,25 @@ fn runtime_inputs_and_limits() {
 }
 
 #[test]
+fn running_a_file_prints_its_text_with_values() {
+    let dir = std::env::temp_dir().join(format!("lamlet-cli-run-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let f = dir.join("age.lam");
+    std::fs::write(&f, "$[Import* std]\n$[# AGE 3]\nHi! I am $AGE ${!if {> AGE 1} \"years\" \"year\"} old, $$5.\n").unwrap();
+    for args in [vec![f.to_str().unwrap()], vec!["run", f.to_str().unwrap()]] {
+        let out = Command::new(env!("CARGO_BIN_EXE_lamlet")).args(&args).output().unwrap();
+        assert_eq!(out.status.code(), Some(0));
+        assert_eq!(String::from_utf8_lossy(&out.stdout), "Hi! I am 3 years old, $5.\n");
+    }
+    std::fs::write(&f, "$[# AGE 3]\nHi ${nope AGE}\n").unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_lamlet")).arg(&f).output().unwrap();
+    assert_eq!(out.status.code(), Some(1));
+    assert!(out.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("age.lam:2:6: name error: unknown name `nope`"));
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
 fn time_snapshot() {
     let dir = std::env::temp_dir().join(format!("lamlet-cli-time-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
@@ -134,5 +153,47 @@ fn call_functions_with_typed_json_arguments() {
     assert_eq!(j["documents"][0]["calls"][0]["value"]["data"], 30);
     let (code, _, _) = lamlet(&["call", f.to_str().unwrap()], None);
     assert_eq!(code, 2, "a missing function name is a usage error");
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn build_writes_each_format() {
+    let dir = std::env::temp_dir().join(format!("lamlet-cli-build-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let f = dir.join("page.lam");
+    std::fs::write(&f, "$[Import* std]$[Import* content]\n# Rooms {#rooms}\n\nOnly ${emph \"two\"} rooms & ${+ 1 1} doors.\n").unwrap();
+    let file = f.to_str().unwrap();
+    let run = |args: &[&str]| {
+        let out = Command::new(env!("CARGO_BIN_EXE_lamlet")).args(args).output().unwrap();
+        (out.status.code().unwrap(), String::from_utf8_lossy(&out.stdout).into_owned(), String::from_utf8_lossy(&out.stderr).into_owned())
+    };
+    // The format comes from -o's extension; prose parsed as CommonMark builds to every format.
+    let md = dir.join("page.md");
+    assert_eq!(run(&["build", file, "-o", md.to_str().unwrap(), "--prose", "commonmark"]).0, 0);
+    assert_eq!(std::fs::read_to_string(&md).unwrap(), "# Rooms\n\nOnly *two* rooms \\& 2 doors.\n");
+    let (code, html, _) = run(&["build", file, "--to", "html", "--prose", "commonmark", "--standalone"]);
+    assert_eq!(code, 0);
+    assert!(html.contains("<title>Rooms</title>") && html.contains("<h1 id=\"rooms\">Rooms</h1>\n<p>Only <em>two</em> rooms &amp; 2 doors.</p>"), "{html}");
+    let (_, speech, _) = run(&["build", file, "--to", "speech", "--prose", "commonmark"]);
+    assert!(speech.contains(r#""section":["rooms"],"spoken":"Only two rooms & 2 doors.""#), "{speech}");
+    let (_, ir, _) = run(&["build", file, "--to", "ir", "--prepared"]);
+    assert!(ir.contains(r#"{"type":"hole""#), "{ir}");
+    // Without options, `build` is what `lamlet FILE` prints.
+    assert_eq!(run(&["build", file]).1, run(&[file]).1);
+    // Usage errors.
+    assert_eq!(run(&["build", file, "-o", "page.xyz"]).0, 2);
+    assert_eq!(run(&["build", file, "--prepared"]).0, 2);
+    assert_eq!(run(&[file, "--to", "md"]).0, 2);
+    std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn the_content_package_is_available_to_every_command() {
+    let dir = std::env::temp_dir().join(format!("lamlet-cli-content-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let f = dir.join("c.lam");
+    std::fs::write(&f, "$[Import* content]${emph \"x\"}").unwrap();
+    let (code, _, _) = lamlet(&["check", f.to_str().unwrap()], None);
+    assert_eq!(code, 0);
     std::fs::remove_dir_all(&dir).ok();
 }
