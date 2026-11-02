@@ -1,0 +1,9 @@
+$[Import* std]
+`λ` spells the lambda head as `^` does, for plain, recursive, and zero-argument lambdas.
+$[# square {λ {x} {* x x}}]
+$[# fact {λ self {n} {!if {= n 0} 1 {* n {self {- n 1}}}}}]
+${square 4} ${fact 5} ${map {' 1 2} {λ {x} {+ x 1}}} ${{λ {} 42}}
+expect: 16
+expect: 120
+expect: [2, 3]
+expect: 42

@@ -51,14 +51,15 @@ is call sugar (`r.f`).
 | Form | Meaning |
 |---|---|
 | `{f a1 ... an}` | Application, evaluated eagerly with exact arity. `{f}` calls a zero-argument function. |
-| `{^ {x1 ... xn} decl* e}` | Lambda |
+| `{^ {x1 ... xn} decl* e}` | Lambda (`λ` is the same head: `{λ {x} e}`) |
 | `{^ self {x1 ... xn} decl* e}` | Recursive lambda: `self` names the function inside its body |
 | `{: e T}` | Ascription: `T` must be a statically known Type |
 | `{' e1 ... en}` | List literal |
 | `{. l1 e1 ... ln en}` | Record literal (labels are not evaluated) |
 | `{!m operands...}` | Macro use (syntax → syntax) |
 
-The heads `^`, `:`, `'`, and `.` are reserved syntax. Every other brace form is an application.
+The heads `^` (also written `λ`), `:`, `'`, and `.` are reserved syntax. Every other brace form is an
+application. Being syntax, they are not values: `[# lam ^]` and `{map xs λ}` are errors.
 
 ### 2.3 Brackets are compiler directives
 

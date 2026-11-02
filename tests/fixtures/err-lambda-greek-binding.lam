@@ -1,0 +1,3 @@
+`λ` is syntax, like `^`, so it cannot be bound.
+$[# λ 3]
+expect-error: syntax: expected a binding name

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-labelledby="lamlet-mark-title lamlet-mark-desc">
+  <title id="lamlet-mark-title">Lamlet symbol</title>
+  <desc id="lamlet-mark-desc">A flat, bold dollar sign and upright lambda in squared curly braces, ${λ}, with chamfered corners except on the lambda, in white on near-black.</desc>
+  <rect width="256" height="256" fill="#1B1B1B"/>
+  <g transform="translate(128 128) scale(0.776119) translate(-92 -128)" fill="none" stroke="#FFF" stroke-linecap="butt" stroke-linejoin="bevel">
+    <clipPath id="lamlet-mark-dark-cut"><rect x="0" y="84" width="256" height="88"/></clipPath>
+    <g id="lamlet-symbol" stroke-width="20">
+      <path id="dollar" stroke-width="16" d="M14 100H-34V128H6V156H-42M-14 84V92M-14 164V172"/>
+      <path id="brace-left" d="M74 94H50V162H74M50 128H30"/>
+      <path id="lambda" stroke-linejoin="miter" clip-path="url(#lamlet-mark-dark-cut)" d="M88.73 74L167.27 182M128 128L88.73 182"/>
+      <path id="brace-right" d="M182 94H206V162H182M206 128H226"/>
+    </g>
+  </g>
+</svg>

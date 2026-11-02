@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="240" viewBox="0 0 1600 240" role="img" aria-labelledby="lamlet-title lamlet-desc">
+  <title id="lamlet-title">Lamlet</title>
+  <desc id="lamlet-desc">A flat, bold dollar sign and upright lambda in squared curly braces, ${λ}, with chamfered corners except on the lambda, in white on near-black, beside the Lamlet wordmark in muted gray (dark version).</desc>
+  <!-- Wordmark: DejaVu Sans Bold outlines; see DejaVu-LICENSE.txt. No external font or image dependencies. -->
+  <rect width="1600" height="240" fill="#1B1B1B"/>
+  <g transform="translate(800 120) scale(1.4162) translate(-315.559 -128)" fill="none" stroke="#FFF" stroke-linecap="butt" stroke-linejoin="bevel">
+    <clipPath id="lamlet-dark-cut"><rect x="0" y="84" width="256" height="88"/></clipPath>
+    <g id="lamlet-symbol" stroke-width="20">
+      <path id="dollar" stroke-width="16" d="M14 100H-34V128H6V156H-42M-14 84V92M-14 164V172"/>
+      <path id="brace-left" d="M74 94H50V162H74M50 128H30"/>
+      <path id="lambda" stroke-linejoin="miter" clip-path="url(#lamlet-dark-cut)" d="M88.73 74L167.27 182M128 128L88.73 182"/>
+      <path id="brace-right" d="M182 94H206V162H182M206 128H226"/>
+    </g>
+    <g id="wordmark" fill="#757575" stroke="none" transform="translate(262.00 172) scale(0.052100 -0.052100)">
+      <path transform="translate(0 0)" d="M188 1493H573V291H1249V0H188Z"/>
+      <path transform="translate(1305 0)" d="M674 504Q562 504 505.5 466Q449 428 449 354Q449 286 494.5 247.5Q540 209 621 209Q722 209 791 281.5Q860 354 860 463V504ZM1221 639V0H860V166Q788 64 698 17.5Q608 -29 479 -29Q305 -29 196.5 72.5Q88 174 88 336Q88 533 223.5 625Q359 717 649 717H860V745Q860 830 793 869.5Q726 909 584 909Q469 909 370 886Q271 863 186 817V1090Q301 1118 417 1132.5Q533 1147 649 1147Q952 1147 1086.5 1027.5Q1221 908 1221 639Z"/>
+      <path transform="translate(2687 0)" d="M1210 934Q1278 1038 1371.5 1092.5Q1465 1147 1577 1147Q1770 1147 1871 1028Q1972 909 1972 682V0H1612V584Q1613 597 1613.5 611Q1614 625 1614 651Q1614 770 1579 823.5Q1544 877 1466 877Q1364 877 1308.5 793Q1253 709 1251 550V0H891V584Q891 770 859 823.5Q827 877 745 877Q642 877 586 792.5Q530 708 530 551V0H170V1120H530V956Q596 1051 681.5 1099Q767 1147 870 1147Q986 1147 1075 1091Q1164 1035 1210 934Z"/>
+      <path transform="translate(4821 0)" d="M172 1556H530V0H172Z"/>
+      <path transform="translate(5523 0)" d="M1290 563V461H453Q466 335 544 272Q622 209 762 209Q875 209 993.5 242.5Q1112 276 1237 344V68Q1110 20 983 -4.5Q856 -29 729 -29Q425 -29 256.5 125.5Q88 280 88 559Q88 833 253.5 990Q419 1147 709 1147Q973 1147 1131.5 988Q1290 829 1290 563ZM922 682Q922 784 862.5 846.5Q803 909 707 909Q603 909 538 850.5Q473 792 457 682Z"/>
+      <path transform="translate(6912 0)" d="M563 1438V1120H932V864H563V389Q563 311 594 283.5Q625 256 717 256H901V0H594Q382 0 293.5 88.5Q205 177 205 389V864H27V1120H205V1438Z"/>
+    </g>
+  </g>
+</svg>

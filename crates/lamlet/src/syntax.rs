@@ -679,7 +679,8 @@ pub enum Item {
 // ---------------------------------------------------------------------------------------------------------
 // Parser (syntax trees to AST)
 
-const RESERVED: &[&str] = &["^", ":", "'", ".", "true", "false", "..."];
+/// `λ` is the other spelling of `^`.
+const RESERVED: &[&str] = &["^", "λ", ":", "'", ".", "true", "false", "..."];
 
 fn is_reserved(name: &str) -> bool {
     RESERVED.contains(&base_name(name))
@@ -735,7 +736,7 @@ fn brace(items: &[Syntax], span: Span) -> DResult<Expr> {
     match head {
         Syntax::Atom(Token { tok: Tok::Macro(parts), .. }) => return Ok(Expr::Macro(parts.clone(), items[1..].to_vec(), span)),
         _ => match head.ident() {
-            Some("^") => return lambda(items, span),
+            Some("^") | Some("λ") => return lambda(items, span),
             Some("'") => return Ok(Expr::List(items[1..].iter().map(parse_expr).collect::<DResult<Vec<_>>>()?, span)),
             Some(".") => return record_literal(&items[1..], span),
             Some(":") => {
@@ -786,7 +787,7 @@ fn lambda(items: &[Syntax], span: Span) -> DResult<Expr> {
     };
     let ps = match items.get(at) {
         Some(Syntax::Brace(ps, _)) => ps,
-        _ => return syntax_err("expected a `{...}` parameter list after `^` (or after `^ name`)", items.get(at).map_or(span, |s| s.span())),
+        _ => return syntax_err("expected a `{...}` parameter list after `^` or `λ` (or after `^ name`)", items.get(at).map_or(span, |s| s.span())),
     };
     let mut params: Vec<(String, Span)> = Vec::new();
     for p in ps {

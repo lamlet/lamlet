@@ -44,7 +44,7 @@ Application is written in braces, function first. There are no infix operators: 
 
 ```text
 ${+ 1 2}                          ;; 3
-$[# square {^ {x} {* x x}}]       ;; [# name value] binds a name; {^ {params} body} is a lambda
+$[# square {^ {x} {* x x}}]       ;; [# name value] binds a name; {^ {params} body} is a lambda ({λ ...} too)
 ${square 7}                       ;; 49
 ${{^ {} 42}}                      ;; a zero-argument function, called with {f}
 ```

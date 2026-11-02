@@ -1,11 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-labelledby="lamlet-mark-title lamlet-mark-desc">
   <title id="lamlet-mark-title">Lamlet symbol</title>
-  <desc id="lamlet-mark-desc">A terracotta lambda nested between ink-colored curly braces.</desc>
-  <g id="lamlet-symbol">
-    <g id="braces" fill="none" stroke="#263642" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M73 40C50 40 46 52 46 73V95C46 114 38 123 24 128C38 133 46 142 46 161V183C46 204 50 216 73 216"/>
-      <path d="M183 40C206 40 210 52 210 73V95C210 114 218 123 232 128C218 133 210 142 210 161V183C210 204 206 216 183 216"/>
+  <desc id="lamlet-mark-desc">A flat, bold dollar sign and upright lambda in squared curly braces, ${λ}, with chamfered corners except on the lambda, in black on light gray.</desc>
+  <rect width="256" height="256" fill="#E4E4E4"/>
+  <g transform="translate(128 128) scale(0.776119) translate(-92 -128)" fill="none" stroke="#000" stroke-linecap="butt" stroke-linejoin="bevel">
+    <clipPath id="lamlet-mark-cut"><rect x="0" y="84" width="256" height="88"/></clipPath>
+    <g id="lamlet-symbol" stroke-width="20">
+      <path id="dollar" stroke-width="16" d="M14 100H-34V128H6V156H-42M-14 84V92M-14 164V172"/>
+      <path id="brace-left" d="M74 94H50V162H74M50 128H30"/>
+      <path id="lambda" stroke-linejoin="miter" clip-path="url(#lamlet-mark-cut)" d="M88.73 74L167.27 182M128 128L88.73 182"/>
+      <path id="brace-right" d="M182 94H206V162H182M206 128H226"/>
     </g>
-    <path id="lambda" fill="#B85336" d="M87 66C100 59 111 63 118 78L164 176C167 183 171 185 179 182L183 195C166 202 155 197 148 182L128 140L99 196H81L119 122L103 88C99 79 95 78 87 82Z"/>
   </g>
 </svg>

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/lamlet.svg" width="528" alt="Lamlet — a lambda between curly braces">
+  <img src="assets/lamlet.svg" width="100%" alt="${λ} Lamlet">
 </p>
 
 # Lamlet

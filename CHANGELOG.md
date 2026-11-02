@@ -13,6 +13,8 @@ bytecode version (`BYTECODE_VERSION`) are tracked separately from the crate vers
 
 ### Added
 
+- `λ` is another spelling of the lambda head: `{λ {x} {* x x}}` is `{^ {x} {* x x}}`. It is reserved, so `λ` can
+  no longer be a binding name (language change).
 - `lamlet FILE` (also `lamlet run FILE`) runs a document from top to bottom and prints it: its text as written,
   each expression region replaced by its value, and declarations removed with their lines.
 - `lamlet-doc`, a new crate with no dependencies but `lamlet`: documents lowered to a format-neutral IR (`Doc`,

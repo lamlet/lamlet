@@ -1,0 +1,4 @@
+$[Import* std]
+`λ` is syntax, not a value.
+${map {' 1} λ}
+expect-error: syntax: `λ` is reserved syntax and cannot be used as a value
