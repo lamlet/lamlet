@@ -35,7 +35,7 @@ What the plan builds on, as of this date (`crates/lamlet/src`):
 | JSON | `lamlet-cli` converts values to and from JSON (`value_json`, `data_json`, `json_to_typed` in `main.rs`) | Lives in the CLI, not the library |
 | Caching identity | `Program::fingerprint` (source, dependencies, language and bytecode versions, native metadata) | Nothing is persisted |
 | Panic sites | 81 `unwrap`/`expect`/`panic!` in the library: `syntax.rs` 34, `builtins.rs` 21, `check.rs` 9, `vm.rs` 5, `compile.rs` 4, others 8 | Not audited |
-| Repository | Git on GitHub, MIT-licensed, tagged `v0.1.0` | No changelog yet (phase 0) |
+| Repository | Git on GitHub, MIT-licensed, tagged `v0.1.1`, changelog, CI | Not on crates.io (phase 0) |
 
 Two facts shape phase 2. First, `Code::consts` (`bytecode.rs`) stores `Value`s, so a compiled `Program` holds
 `Rc`s through its constants and not only through `Rc<Code>`. Second, static bindings and static region values
@@ -55,8 +55,8 @@ can be closures (`Value::Closure`), which capture `Rc` values and cannot be conv
 ## Phase 0: a releasable crate
 
 1. Put the repository under version control, with a changelog, the MIT `LICENSE` file, and a tag per release.
-   (Done: git repository on GitHub, `LICENSE`, every crate declares `license = "MIT"`, tag `v0.1.0`. The
-   changelog remains.)
+   (Done: git repository on GitHub, `LICENSE`, every crate declares `license = "MIT"`, tags `v0.1.0` and
+   `v0.1.1`, `CHANGELOG.md`.)
 2. Publish `lamlet` (the library) so consumers can depend on a version and vendor it: crates.io, or a tagged git
    URL until then. The library keeps zero dependencies; `serde` support is an optional feature.
 3. Host adapters that serve one consumer do not belong in this repository (only synthetic hosts and examples do).
@@ -66,7 +66,12 @@ can be closures (`Value::Closure`), which capture `Rc` values and cannot be conv
    `BYTECODE_VERSION` are versioned separately from the crate: a language change that rejects previously
    accepted documents is a breaking crate release.
 5. CI: `cargo test`, `cargo clippy -D warnings`, `cargo doc` without warnings, and a build of `lamlet` alone
-   with `--locked --offline` after `cargo vendor`, to prove the zero-dependency claim.
+   with `--locked --offline` after `cargo vendor`, to prove the zero-dependency claim. (Done:
+   `.github/workflows/ci.yml` runs tests, clippy, and rustdoc with warnings as errors, and fails if `cargo tree`
+   shows any dependency of `lamlet`.)
+
+Item 4 waits for phase 1: hiding `check`, `vm`, and the other modules before `lamlet::embed` exists would hide the
+only API there is. Until then the policy is the one in `CHANGELOG.md`: any `0.x` minor release may break the API.
 
 **Done when** a scratch crate outside the repository depends on a tagged `lamlet` by version or git tag, builds
 offline from a vendored copy, and runs `run_source`.

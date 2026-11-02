@@ -8,7 +8,7 @@
 //!    samples animation curves at frame times by calling the Lamlet closures with
 //!    [`lamlet::Instance::call`]. The document is never re-evaluated per frame.
 //! 3. **Execution (the host).** Speech synthesis is a [`Synthesizer`] the host supplies. Playback, blending,
-//!    seeking, and recording stay in render-lab, which consumes the [`Timeline`] JSON this crate writes.
+//!    seeking, and recording stay in render-lab, which consumes the `Timeline` JSON this crate writes.
 //!
 //! The crate depends on `lamlet` and `serde_json` only. render-lab is not a dependency: its `Timeline` schema
 //! (lab/src/shot.rs) is the contract.
