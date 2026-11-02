@@ -17,11 +17,18 @@ bytecode version (`BYTECODE_VERSION`) are tracked separately from the crate vers
   file), `Document::parts`/`render`/`render_with`/`binding`, `Instance` with persistent inputs and typed calls
   (`call_typed`), one `Error` type, `IntoLamlet`/`FromLamlet` conversions, and `Data`, a plain `Send + Sync`
   copy of values.
+- Natives from Rust types: `NativeRegistry::function` takes the signature from a closure's argument tuple and
+  result (`LamletType`), with a builder for availability, capabilities, version, and docs.
+  `NativeRegistry::declarations` writes the matching `[NativeType]`/`[Native]` package. Typed opaque handles:
+  `NativeType`, `Opaque<T>`, and `NativeRegistry::opaque`. `NativeCtx::input_as` reads a typed input.
+- `NativeEntry::doc`.
 - `check_source` and `SourceFile::with_origin`: diagnostics can point into a larger host file.
 - Continuous integration: tests, clippy, rustdoc, and a check that the `lamlet` library has no dependencies.
 
 ### Fixed
 
+- A runtime error raised by a call in tail position (a failing native or builtin, an arity mismatch) now points
+  at that call. It used to point at the caller's call site, or at nothing.
 - Broken documentation link in `lamlet-present`; the `lamlet` CLI binary no longer collides with the `lamlet`
   library in `cargo doc`.
 

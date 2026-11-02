@@ -57,6 +57,23 @@ let data = Data::from_value(&value)?;                          // plain, Send + 
 - **Conversions.** `IntoLamlet`/`FromLamlet` for `()`, `bool`, `i64`, `f64` (finite only), `String`, `Vec<T>`,
   `Option<T>` (std's `<none, some>`), `(A, B)` (std's `{first, second}`), `Value`, and `Data`. Records:
   `record().field("x", 1i64).build()?`.
+- **Typed natives.** The signature comes from the closure's Rust types; arguments arrive as a tuple:
+
+  ```rust
+  struct Tree { name: String }
+  impl NativeType for Tree { const TYPE_ID: &'static str = "host.garden/tree"; }
+
+  let r = engine.natives_mut();
+  r.opaque::<Tree>()?;                                          // register the opaque type first
+  r.function("host.counts/leaves", |_, (name,): (String,)| Ok(42i64)).pure().doc("Fn([String], Int). ...").register()?;
+  r.function("host.garden/plant", |_, (name,): (String,)| Ok(Opaque::new(Tree { name }))).register()?; // Runtime
+  r.function("host.clock/now", |ctx, ()| ctx.input_as::<f64>("clock")).capability("clock").register()?;
+  let package = r.declarations("host")?;                        // Lamlet source: [NativeType]/[Native] stubs with docs
+  ```
+
+  Add `package` to a `MemoryResolver` (`resolver.add("host", &package, Exports::All)`), and documents use
+  `[Import* host]`. Names come from the id's last segment (`make-widget` → `makeWidget`, type `widget` →
+  `Widget`). `Opaque<T>` derefs to `&T`; `T`'s `Drop` runs when the last handle is gone.
 - **Build-time check.** `engine.check_interface(file)` uses native metadata only. A `[% ...]` that calls a
   native fails it, because preparation needs the implementation.
 

@@ -50,6 +50,7 @@ fn registry() -> NativeRegistry {
         availability: Availability::Runtime,
         capabilities: vec!["secrets".into()],
         callback: None,
+        doc: None,
     };
     secret.callback = Some(Rc::new(|_, _| Ok(Value::str("s3cret"))));
     r.register(secret).unwrap();

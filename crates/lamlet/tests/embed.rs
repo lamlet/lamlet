@@ -211,6 +211,8 @@ fn runtime_errors_and_budgets_surface_as_errors() {
     let mut inst = e.instance(&doc).unwrap();
     let err = inst.call_typed::<_, i64>(&doc.binding("quot").unwrap(), (1i64, 0i64)).unwrap_err();
     assert_eq!(err.kind(), ErrorKind::Runtime);
+    // `{div a b}` is a tail call; the error still points at it.
+    assert_eq!(err.locations()[0].as_ref().map(|l| l.column), Some(33), "{}", err);
     inst.set_limits(Limits { max_instructions: 10_000, ..Limits::default() });
     let err = inst.call_typed::<_, i64>(&doc.binding("spin").unwrap(), (0i64,)).unwrap_err();
     assert_eq!(err.diagnostics()[0].kind, DiagKind::Limit);

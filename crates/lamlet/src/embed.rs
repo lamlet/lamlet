@@ -83,6 +83,8 @@ pub enum ErrorKind {
     Runtime,
     /// A value crossing the boundary had the wrong shape or type.
     Value,
+    /// A native function or type could not be registered (a repeated id, an unregistered opaque type).
+    Registry,
 }
 
 /// The one error type of the embedding surface. It carries the diagnostics and the sources they point into,
@@ -102,6 +104,11 @@ impl Error {
     fn value(message: impl Into<String>) -> Error {
         let d = Diagnostic::new(DiagKind::Type, message, None);
         Error::new(ErrorKind::Value, vec![d], Rc::new(SourceMap::default()))
+    }
+
+    fn registry(message: impl Into<String>) -> Error {
+        let d = Diagnostic::new(DiagKind::Native, message, None);
+        Error::new(ErrorKind::Registry, vec![d], Rc::new(SourceMap::default()))
     }
 
     fn runtime(e: crate::vm::RuntimeError, sources: &Rc<SourceMap>) -> Error {
@@ -994,5 +1001,363 @@ impl fmt::Debug for Document {
 impl fmt::Debug for Instance {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Instance")
+    }
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// Natives from Rust types
+
+/// Rust types with a fixed Lamlet type, usable in native signatures ([`NativeRegistry::function`]).
+pub trait LamletType {
+    fn lamlet_type() -> TypeDesc;
+}
+
+impl LamletType for () {
+    fn lamlet_type() -> TypeDesc {
+        TypeDesc::Unit
+    }
+}
+impl LamletType for bool {
+    fn lamlet_type() -> TypeDesc {
+        TypeDesc::Bool
+    }
+}
+impl LamletType for i64 {
+    fn lamlet_type() -> TypeDesc {
+        TypeDesc::Int
+    }
+}
+impl LamletType for f64 {
+    fn lamlet_type() -> TypeDesc {
+        TypeDesc::Float
+    }
+}
+impl LamletType for String {
+    fn lamlet_type() -> TypeDesc {
+        TypeDesc::String
+    }
+}
+impl<T: LamletType> LamletType for Vec<T> {
+    fn lamlet_type() -> TypeDesc {
+        TypeDesc::List(Rc::new(T::lamlet_type()))
+    }
+}
+impl<T: LamletType> LamletType for Option<T> {
+    fn lamlet_type() -> TypeDesc {
+        TypeDesc::Variant(vec![(Rc::from("none"), TypeDesc::Unit), (Rc::from("some"), T::lamlet_type())])
+    }
+}
+impl<A: LamletType, B: LamletType> LamletType for (A, B) {
+    fn lamlet_type() -> TypeDesc {
+        TypeDesc::Record(vec![(Rc::from("first"), A::lamlet_type()), (Rc::from("second"), B::lamlet_type())])
+    }
+}
+
+/// The parameter list of a typed native: `()` or a tuple of [`LamletType`] values.
+pub trait NativeArgs: Sized {
+    fn types() -> Vec<TypeDesc>;
+    fn from_args(args: &[Value]) -> Result<Self, String>;
+}
+
+impl NativeArgs for () {
+    fn types() -> Vec<TypeDesc> {
+        vec![]
+    }
+    fn from_args(args: &[Value]) -> Result<(), String> {
+        match args.len() {
+            0 => Ok(()),
+            n => Err(format!("expected no arguments, got {}", n)),
+        }
+    }
+}
+
+macro_rules! native_args {
+    ($n:literal; $($t:ident $i:tt),+) => {
+        impl<$($t: FromLamlet + LamletType),+> NativeArgs for ($($t,)+) {
+            fn types() -> Vec<TypeDesc> {
+                vec![$($t::lamlet_type()),+]
+            }
+            fn from_args(args: &[Value]) -> Result<Self, String> {
+                if args.len() != $n {
+                    return Err(format!("expected {} arguments, got {}", $n, args.len()));
+                }
+                Ok(($($t::from_lamlet(&args[$i]).map_err(|m| format!("argument {}: {}", $i + 1, m))?,)+))
+            }
+        }
+    };
+}
+native_args!(1; A 0);
+native_args!(2; A 0, B 1);
+native_args!(3; A 0, B 1, C 2);
+native_args!(4; A 0, B 1, C 2, D 3);
+native_args!(5; A 0, B 1, C 2, D 3, E 4);
+native_args!(6; A 0, B 1, C 2, D 3, E 4, F 5);
+
+impl NativeRegistry {
+    /// Register a Rust closure as a native, with its Lamlet signature taken from the closure's types. The
+    /// closure receives the native context and its arguments as a tuple:
+    ///
+    /// ```
+    /// # use lamlet::embed::*;
+    /// let mut r = NativeRegistry::new();
+    /// r.function("host.geo/area", |_, (w, h): (f64, f64)| Ok(w * h)).pure().doc("Fn([Float, Float], Float). An area.").register()?;
+    /// r.function("host.clock/now", |ctx, ()| ctx.input_as::<f64>("clock")).register()?; // Runtime by default
+    /// # Ok::<(), Error>(())
+    /// ```
+    ///
+    /// The returned builder sets availability (Runtime unless changed), capabilities, version, and docs, and
+    /// [`NativeBuilder::register`] adds the entry.
+    pub fn function<A, R, F>(&mut self, api_id: &str, f: F) -> NativeBuilder<'_>
+    where
+        A: NativeArgs,
+        R: IntoLamlet + LamletType,
+        F: Fn(&mut NativeCtx, A) -> Result<R, String> + 'static,
+    {
+        let callback: crate::host::NativeCallback = Rc::new(move |ctx: &mut NativeCtx, args: &[Value]| f(ctx, A::from_args(args)?)?.into_lamlet());
+        let entry = NativeEntry {
+            api_id: api_id.into(),
+            version: "1".into(),
+            params: A::types(),
+            ret: R::lamlet_type(),
+            availability: Availability::Runtime,
+            capabilities: vec![],
+            callback: Some(callback),
+            doc: None,
+        };
+        NativeBuilder { registry: self, entry }
+    }
+
+    /// Register the opaque host type `T` under its `TYPE_ID`.
+    pub fn opaque<T: NativeType>(&mut self) -> Result<(), Error> {
+        self.register_type(T::TYPE_ID, T::VERSION).map_err(Error::registry)
+    }
+
+    /// A Lamlet package declaring every native type and function whose id is `prefix` or starts with
+    /// `prefix.` or `prefix/`, plus every native type their signatures use. Each declaration carries the
+    /// entry's doc. Names come from the last segment of the id: `host.ui/make-widget` becomes the function
+    /// `makeWidget`, and the type `host.ui/widget` becomes `Widget`. Fails when two names collide or a name
+    /// is not an identifier.
+    pub fn declarations(&self, prefix: &str) -> Result<String, Error> {
+        let selected = |id: &str| id == prefix || id.starts_with(&format!("{}.", prefix)) || id.starts_with(&format!("{}/", prefix));
+        let mut functions: Vec<&NativeEntry> = self.entries.values().filter(|e| selected(&e.api_id)).collect();
+        functions.sort_by(|a, b| a.api_id.cmp(&b.api_id));
+        let mut type_ids: std::collections::BTreeSet<String> = self.types.keys().filter(|id| selected(id)).cloned().collect();
+        for e in &functions {
+            for t in e.params.iter().chain(std::iter::once(&e.ret)) {
+                opaque_ids(t, &mut type_ids);
+            }
+        }
+        let mut used: HashMap<String, String> = HashMap::new();
+        let mut claim = |name: String, id: &str| -> Result<String, Error> {
+            if !crate::types::is_label(&name) || ["true", "false"].contains(&name.as_str()) {
+                return Err(Error::registry(format!("`{}` (from {:?}) is not a usable Lamlet name", name, id)));
+            }
+            if let Some(other) = used.insert(name.clone(), id.to_string()) {
+                return Err(Error::registry(format!("{:?} and {:?} would both be declared as `{}`", other, id, name)));
+            }
+            Ok(name)
+        };
+        let mut type_names = HashMap::new();
+        for id in &type_ids {
+            type_names.insert(id.clone(), claim(id_name(id, true), id)?);
+        }
+        let mut out = format!(
+            "Native interface for `{}`, generated by `NativeRegistry::declarations`. Regenerate it instead of editing it.\n\n$[Import std]\n",
+            prose(prefix)
+        );
+        for id in &type_ids {
+            out.push_str(&format!("\n$[NativeType {} {:?}]\n", type_names[id], id));
+        }
+        for e in functions {
+            let name = claim(id_name(&e.api_id, false), &e.api_id)?;
+            let params: Vec<String> = e.params.iter().map(|t| type_expr(t, &type_names)).collect();
+            let sig = format!("{{std::Fn {{' {}}} {}}}", params.join(" "), type_expr(&e.ret, &type_names)).replace("{' }", "{'}");
+            out.push('\n');
+            if let Some(doc) = &e.doc {
+                // A doc is the prose paragraph directly above the declaration: no blank lines, no active `$`.
+                let lines: Vec<&str> = doc.lines().filter(|l| !l.trim().is_empty()).collect();
+                out.push_str(&prose(&lines.join("\n")));
+                out.push('\n');
+            }
+            out.push_str(&format!("$[Native {} [% {}] {:?} {}]\n", name, sig, e.api_id, e.availability.as_str()));
+        }
+        Ok(out)
+    }
+}
+
+/// Prose that Lamlet reads back as the same text.
+fn prose(text: &str) -> String {
+    text.replace('$', "$$")
+}
+
+fn opaque_ids(t: &TypeDesc, out: &mut std::collections::BTreeSet<String>) {
+    match t {
+        TypeDesc::Opaque(id) => {
+            out.insert(id.to_string());
+        }
+        TypeDesc::List(e) => opaque_ids(e, out),
+        TypeDesc::Func(ps, r) => ps.iter().chain(std::iter::once(&**r)).for_each(|t| opaque_ids(t, out)),
+        TypeDesc::Record(fs) | TypeDesc::Variant(fs) => fs.iter().for_each(|(_, t)| opaque_ids(t, out)),
+        _ => {}
+    }
+}
+
+/// The Lamlet name for an id's last segment: camelCase for functions, PascalCase for types.
+fn id_name(id: &str, capitalize: bool) -> String {
+    let last = id.rsplit(['/', '.']).next().unwrap_or(id);
+    let mut out = String::new();
+    for (i, word) in last.split(['-', '_']).filter(|w| !w.is_empty()).enumerate() {
+        let mut cs = word.chars();
+        if let Some(c) = cs.next() {
+            if i > 0 || capitalize {
+                out.extend(c.to_uppercase());
+            } else {
+                out.push(c);
+            }
+            out.push_str(cs.as_str());
+        }
+    }
+    out
+}
+
+/// A Lamlet expression computing the type, using `std` qualified so the package defines nothing else.
+fn type_expr(t: &TypeDesc, names: &HashMap<String, String>) -> String {
+    let labeled = |ctor: &str, fs: &[(Rc<str>, TypeDesc)]| {
+        let items: Vec<String> = fs.iter().map(|(n, t)| format!("{{std::Field {:?} {}}}", n, type_expr(t, names))).collect();
+        format!("{{{} {{' {}}}}}", ctor, items.join(" ")).replace("{' }", "{'}")
+    };
+    match t {
+        TypeDesc::Unit => "std::Unit".into(),
+        TypeDesc::Bool => "std::Bool".into(),
+        TypeDesc::Int => "std::Int".into(),
+        TypeDesc::Float => "std::Float".into(),
+        TypeDesc::String => "std::String".into(),
+        TypeDesc::Type => "std::Type".into(),
+        TypeDesc::List(e) => format!("{{std::List {}}}", type_expr(e, names)),
+        TypeDesc::Func(ps, r) => {
+            let ps: Vec<String> = ps.iter().map(|p| type_expr(p, names)).collect();
+            format!("{{std::Fn {{' {}}} {}}}", ps.join(" "), type_expr(r, names)).replace("{' }", "{'}")
+        }
+        TypeDesc::Record(fs) => labeled("std::Struct", fs),
+        TypeDesc::Variant(fs) if fs.is_empty() => "std::Never".into(),
+        TypeDesc::Variant(fs) => labeled("std::Variant", fs),
+        TypeDesc::Opaque(id) => names.get(&**id).cloned().unwrap_or_else(|| id_name(id, true)),
+    }
+}
+
+impl NativeCtx<'_> {
+    /// A host input converted to a Rust type.
+    pub fn input_as<T: FromLamlet>(&self, key: &str) -> Result<T, String> {
+        T::from_lamlet(&self.input(key)?).map_err(|m| format!("host input {:?}: {}", key, m))
+    }
+}
+
+/// Settings of a native being registered; [`NativeBuilder::register`] adds it.
+#[must_use = "a native is only added by `register()`"]
+pub struct NativeBuilder<'r> {
+    registry: &'r mut NativeRegistry,
+    entry: NativeEntry,
+}
+
+impl NativeBuilder<'_> {
+    /// Callable at any stage, including static preparation (`[% ...]`). For deterministic functions only.
+    pub fn pure(mut self) -> Self {
+        self.entry.availability = Availability::Pure;
+        self
+    }
+
+    /// Callable only during static preparation.
+    pub fn static_(mut self) -> Self {
+        self.entry.availability = Availability::Static;
+        self
+    }
+
+    /// Callable only at runtime (the default).
+    pub fn runtime(mut self) -> Self {
+        self.entry.availability = Availability::Runtime;
+        self
+    }
+
+    /// Require a capability that the instance must grant (`Instance::grant`).
+    pub fn capability(mut self, name: &str) -> Self {
+        self.entry.capabilities.push(name.into());
+        self
+    }
+
+    /// The contract version (default "1"); part of the program fingerprint.
+    pub fn version(mut self, version: &str) -> Self {
+        self.entry.version = version.into();
+        self
+    }
+
+    /// Documentation for the generated declaration. By convention it starts with the Lamlet type.
+    pub fn doc(mut self, doc: &str) -> Self {
+        self.entry.doc = Some(doc.into());
+        self
+    }
+
+    /// Add the native. Fails when the id is already registered or the signature uses an unregistered opaque
+    /// type.
+    pub fn register(self) -> Result<(), Error> {
+        self.registry.register(self.entry).map_err(Error::registry)
+    }
+}
+
+/// A Rust type that Lamlet code can hold as an opaque value of type `Native("TYPE_ID")`.
+pub trait NativeType: std::any::Any {
+    const TYPE_ID: &'static str;
+    const VERSION: &'static str = "1";
+}
+
+/// A typed handle to a host value. Cloning shares the value; it is dropped (running `T`'s `Drop`) when the
+/// last handle, in Rust or in Lamlet, is gone.
+pub struct Opaque<T> {
+    rc: Rc<crate::value::OpaqueValue>,
+    _t: std::marker::PhantomData<T>,
+}
+
+impl<T: NativeType> Opaque<T> {
+    pub fn new(data: T) -> Opaque<T> {
+        let rc = Rc::new(crate::value::OpaqueValue { type_id: Rc::from(T::TYPE_ID), data: Box::new(data), release: None });
+        Opaque { rc, _t: std::marker::PhantomData }
+    }
+
+    pub fn get(&self) -> &T {
+        // Every constructor checks the type id and the Rust type.
+        self.rc.data.downcast_ref::<T>().expect("opaque handle holds its declared type")
+    }
+}
+
+impl<T> Clone for Opaque<T> {
+    fn clone(&self) -> Self {
+        Opaque { rc: self.rc.clone(), _t: std::marker::PhantomData }
+    }
+}
+
+impl<T: NativeType> std::ops::Deref for Opaque<T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        self.get()
+    }
+}
+
+impl<T: NativeType> LamletType for Opaque<T> {
+    fn lamlet_type() -> TypeDesc {
+        TypeDesc::Opaque(Rc::from(T::TYPE_ID))
+    }
+}
+
+impl<T: NativeType> IntoLamlet for Opaque<T> {
+    fn into_lamlet(self) -> Result<Value, String> {
+        Ok(Value::Opaque(self.rc))
+    }
+}
+
+impl<T: NativeType> FromLamlet for Opaque<T> {
+    fn from_lamlet(v: &Value) -> Result<Opaque<T>, String> {
+        match v {
+            Value::Opaque(o) if &*o.type_id == T::TYPE_ID && o.data.is::<T>() => Ok(Opaque { rc: o.clone(), _t: std::marker::PhantomData }),
+            _ => mismatch(&format!("a native value of type {:?}", T::TYPE_ID), v),
+        }
     }
 }

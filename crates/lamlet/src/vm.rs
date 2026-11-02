@@ -391,11 +391,22 @@ impl Vm {
                 }
                 Op::TailCall(n) => {
                     let n = n as usize;
+                    // The frame is released before the call, so remember the call site: an error raised
+                    // while making the call (a failing native or builtin, an arity mismatch) belongs to it.
+                    let site = {
+                        let f = &self.frames[fi];
+                        (f.closure.code.name.clone(), f.closure.code.spans[f.ip - 1])
+                    };
                     let moved = self.stack.split_off(self.stack.len() - n - 1);
                     self.frames.pop();
                     self.stack.truncate(base - 1);
                     self.stack.extend(moved);
-                    if let Some(v) = self.call(n as u16)? {
+                    let called = self.call(n as u16).map_err(|mut e| {
+                        e.span = Some(site.1);
+                        e.stack.insert(0, site);
+                        e
+                    });
+                    if let Some(v) = called? {
                         if let Some(r) = self.deliver(v)? {
                             return Ok(r);
                         }

@@ -44,6 +44,9 @@ pub struct NativeEntry {
     pub capabilities: Vec<String>,
     /// `None` in an interface-only registry.
     pub callback: Option<NativeCallback>,
+    /// Documentation written above the generated `[Native ...]` declaration (`NativeRegistry::declarations`).
+    /// It does not affect checking, linking, or the fingerprint.
+    pub doc: Option<String>,
 }
 
 #[derive(Clone)]
@@ -123,6 +126,7 @@ impl NativeRegistry {
             availability,
             capabilities: vec![],
             callback: Some(Rc::new(f)),
+            doc: None,
         })
     }
 

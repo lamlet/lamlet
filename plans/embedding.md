@@ -178,6 +178,23 @@ four-thread test passes. Checking and calling benchmarks (phase 5) regress by at
 
 ## Phase 3: native functions from Rust types
 
+**Status: implemented (2026-11-01)** in `crates/lamlet/src/embed.rs`, tested by `crates/lamlet/tests/natives.rs`
+(8 tests). Notes:
+
+- **Arguments as a tuple.** The closure takes the context and one tuple: `|ctx, (w, h): (f64, f64)| Ok(w * h)`,
+  and `|ctx, ()| ...` for no arguments. A single method then infers the signature for any arity (up to six),
+  and the closure's types come from its bound. The result is always `Result<R, String>`.
+- **Availability defaults to Runtime.** `.pure()` must be asked for, because a Pure native runs during
+  preparation. `.register()` adds the entry; the builder is `#[must_use]`.
+- **Declarations.** Names come from the last segment of the id. The package uses `std` qualified
+  (`std::Fn`, `std::Int`), so it defines only the natives and can be imported with `[Import* ...]` next to `std`.
+  Name collisions are an error. There is no per-entry name override yet.
+- **Opaque types.** `NativeType` is a trait with a `TYPE_ID`. `Opaque<T>` derefs to `T`, and releasing is `T`'s
+  `Drop`, so the registry's release hook is not needed for typed handles.
+- **Fixed along the way.** A native failing in tail position (`{^ {x} {leaves x}}`) reported no position,
+  because the VM releases the frame before a tail call. Builtins had the same problem. Call-time errors of a tail
+  call now carry its site.
+
 - `NativeRegistry::function(api_id, f)` infers parameter and result `TypeDesc`s from the closure's types through
   `IntoLamlet`/`FromLamlet`, and returns a builder for availability (`.pure()`, `.static_()`, `.runtime()`),
   capabilities, version, and documentation. A closure may take `&mut NativeCtx` first to read inputs.
