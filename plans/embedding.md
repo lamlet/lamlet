@@ -257,7 +257,7 @@ fixture carries its expected code.
 
 ## Phase 5: speed and caching
 
-**Status: benchmarks implemented (2026-11-01); artifacts not started.** `crates/lamlet/benches/embed.rs` runs
+**Status: benchmarks and the `std` cache implemented (2026-11-01); artifacts not started.** `crates/lamlet/benches/embed.rs` runs
 with `cargo bench -p lamlet --bench embed`. With `-- --gate`, which CI runs, it fails when checking or evaluation
 scales worse than linearly (more than 2.6× for twice the document), or when the deterministic instruction counts
 grow (13 for one `ease` call, 28,000,032 for a fold over 10⁶ elements). Timings are printed and never gated,
@@ -274,9 +274,34 @@ First measurements (release build, AMD Ryzen AI 9 HX 370, minimum of repeated ru
 | One call of a small Float curve (`call_typed`) | 175 ns |
 | Fold over 10⁶ elements | 325 ms (87 M instructions/s) |
 
-**A finding: `std` is checked again for every document.** It is about half of the time spent on a 1,000-line
-document, and nearly all of it for a small one. Caching checked packages in the `Engine`, keyed by package
-source and version, is the cheapest speedup available. It is simpler than full artifacts, and should come first.
+**A finding: `std` was checked again for every document.** It was about half of the time spent on a 1,000-line
+document, and nearly all of it for a small one.
+
+**Done: the engine checks `std` once.** Moving checked packages between sessions would mean renumbering type
+variables, global slots, file ids, definition ids, and hygiene marks. Instead, `lamlet::Prelude` holds a session
+with `std` checked, and each check starts from a copy of it (`Session::fork`). The copy takes about 30 µs,
+because the type context after `std` has only 553 variables. `std` stays out of a check until the check imports
+it: its dependency entry, initializer, and native requirements are added on first import. So a document without
+`std` does not depend on it, and fingerprints are unchanged. A test compares every fixture checked both ways.
+The engine keeps one prelude for full checks and one for interface checks. It drops them when the resolver,
+natives, or options change, and rebuilds them when the resolver's `std` source changes.
+
+| Workload | Before | After |
+|---|---|---|
+| Check a document without `std` | 29 µs | 39 µs (the copy and the `std` hash, below) |
+| Check `$[Import* std]` alone | 1.14 ms | 0.13 ms |
+| Check `$[Import* std]` and 10 lines | 1.15 ms | 0.14 ms |
+| Check 1,000 lines with 200 regions | 2.1 ms | 1.2 ms |
+
+What remains per check:
+- Copying the session: 30 µs.
+- Resolving and hashing `std` to detect a changed source: 13 µs. A resolver that never changes `std` (any
+  `MemoryResolver`, which the engine owns) would not need it, but a custom resolver might.
+- With `[Import* std]`, about 90 µs for building `static_bindings` and `docs` over every name in scope,
+  `std`'s included. They could be built lazily, but they are public fields of the internal `Document`.
+
+Other packages (a host's generated declarations, say) are still checked per document. Preloading them would
+need the renumbering above, or a prelude per set of packages.
 
 - **Compiled artifacts.** A versioned binary format for a checked `Program` plus its static values and spans,
   keyed by the existing fingerprint (source, dependencies, language and bytecode versions, native metadata), so a

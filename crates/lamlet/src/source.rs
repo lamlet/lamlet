@@ -23,7 +23,7 @@ impl Span {
 }
 
 /// A named source text with a line index for display positions.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SourceFile {
     pub name: String,
     pub text: String,
@@ -67,7 +67,7 @@ impl SourceFile {
 }
 
 /// All source files known to one compilation session.
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct SourceMap {
     pub files: Vec<SourceFile>,
 }

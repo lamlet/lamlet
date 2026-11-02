@@ -246,7 +246,7 @@ impl Scheme {
 /// Level used for the variables of builtin schemes; they are always quantified.
 pub const GENERIC_LEVEL: u32 = 1_000_000;
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct TypeCtx {
     vars: Vec<VarSlot>,
     evars: Vec<EvarSlot>,

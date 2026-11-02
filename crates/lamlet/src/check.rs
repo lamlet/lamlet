@@ -92,6 +92,9 @@ pub struct RegionInfo {
     pub doc: Option<String>,
 }
 
+/// What a program requires of a native: its parameter types, result type, and availability.
+pub type NativeContract = (Vec<TypeDesc>, TypeDesc, Availability);
+
 pub struct Session {
     pub tcx: TypeCtx,
     pub sources: SourceMap,
@@ -104,7 +107,7 @@ pub struct Session {
     loading: Vec<String>,
     pub n_globals: u32,
     pub package_inits: Vec<(String, Rc<Code>)>,
-    pub native_requirements: BTreeMap<String, (Vec<TypeDesc>, TypeDesc, Availability)>,
+    pub native_requirements: BTreeMap<String, NativeContract>,
     pub dependencies: Vec<(String, String, u64)>,
     next_def: u64,
     next_local: u32,
@@ -115,6 +118,17 @@ pub struct Session {
     local_names: HashMap<LocalId, String>,
     /// Docs of documented definitions, by definition identity (survives imports and aliases).
     pub docs: HashMap<u64, String>,
+    /// Packages checked in a prelude session that this check has not imported yet (see `Session::prelude`).
+    preloaded: HashMap<String, Preloaded>,
+}
+
+/// What loading a package added to a prelude session, held back until a check forked from it imports the
+/// package. Until then the check does not depend on it: no dependency entry, initializer, or native requirement.
+#[derive(Clone)]
+struct Preloaded {
+    dependency: (String, String, u64),
+    init: Option<(String, Rc<Code>)>,
+    requirements: Vec<(String, NativeContract)>,
 }
 
 type CheckResult<T> = DResult<T>;
@@ -145,6 +159,56 @@ impl Session {
             expansion_nodes: 0,
             local_names: HashMap::new(),
             docs: HashMap::new(),
+            preloaded: HashMap::new(),
+        }
+    }
+
+    /// A session with `std` already checked, for checks to start from (`fork`) instead of checking `std` again.
+    /// A check forked from it behaves as if it had started fresh: `std` becomes a dependency only when imported.
+    /// `None` when `std` does not check on its own or imports other packages; checks then start fresh, and
+    /// report any problem with `std` where they import it.
+    pub fn prelude(resolver: Rc<dyn Resolver>, natives: Rc<NativeRegistry>, require_linked: bool, static_limits: Limits) -> Option<Session> {
+        let mut s = Session::new(resolver, natives, require_linked, static_limits);
+        s.load_package("std", Span::default()).ok()?;
+        let mut deps = s.dependencies.iter().filter(|d| d.0 != CORE_PACKAGE);
+        let dependency = match (deps.next(), deps.next()) {
+            (Some(d), None) if d.0 == "std" => d.clone(),
+            _ => return None,
+        };
+        s.dependencies.retain(|d| d.0 == CORE_PACKAGE);
+        let init = s.package_inits.iter().position(|p| p.0 == "std").map(|i| s.package_inits.remove(i));
+        if !s.package_inits.is_empty() {
+            return None;
+        }
+        let requirements = std::mem::take(&mut s.native_requirements).into_iter().collect();
+        s.preloaded.insert("std".into(), Preloaded { dependency, init, requirements });
+        Some(s)
+    }
+
+    /// An independent copy to check one document in. Type variables, sources, and globals are copied; checked
+    /// package exports and static values are shared, as they are immutable.
+    pub fn fork(&self) -> Session {
+        Session {
+            tcx: self.tcx.clone(),
+            sources: self.sources.clone(),
+            resolver: self.resolver.clone(),
+            natives: self.natives.clone(),
+            require_linked: self.require_linked,
+            static_vm: self.static_vm.fork(),
+            packages: self.packages.clone(),
+            loading: Vec::new(),
+            n_globals: self.n_globals,
+            package_inits: self.package_inits.clone(),
+            native_requirements: self.native_requirements.clone(),
+            dependencies: self.dependencies.clone(),
+            next_def: self.next_def,
+            next_local: self.next_local,
+            marks: self.marks.clone(),
+            expansions: self.expansions,
+            expansion_nodes: self.expansion_nodes,
+            local_names: self.local_names.clone(),
+            docs: self.docs.clone(),
+            preloaded: self.preloaded.clone(),
         }
     }
 
@@ -233,7 +297,14 @@ impl Session {
     /// Resolve, check, and initialize-plan a package once per session.
     pub fn load_package(&mut self, name: &str, span: Span) -> CheckResult<Rc<PackageInfo>> {
         if let Some(p) = self.packages.get(name) {
-            return Ok(p.clone());
+            let p = p.clone();
+            // The first import of a preloaded package records it, as loading it would have.
+            if let Some(pre) = self.preloaded.remove(name) {
+                self.dependencies.push(pre.dependency);
+                self.package_inits.extend(pre.init);
+                self.native_requirements.extend(pre.requirements);
+            }
+            return Ok(p);
         }
         if name == CORE_PACKAGE {
             return Ok(self.core_package());

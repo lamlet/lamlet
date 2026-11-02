@@ -35,7 +35,10 @@ let a: f64 = instance.call_typed(&area, (3.0, 4.0))?;
    so far.
 3. **Run.** An `Instance` evaluates the rest and calls the document's functions, any number of times.
 
-An engine is set up once and checks any number of documents. A document can have any number of instances.
+An engine is set up once and checks any number of documents. It checks `std` the first time it is needed,
+and starts every later check from that state. A small document that imports `std` then checks in about
+0.13 ms instead of 1.1 ms, with the same result as checking from scratch. Changing the engine's resolver, natives, or options makes it
+check `std` again. A document can have any number of instances.
 
 ## 2. Documents
 

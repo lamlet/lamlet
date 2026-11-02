@@ -28,6 +28,10 @@ bytecode version (`BYTECODE_VERSION`) are tracked separately from the crate vers
   `host_build_check`, `host_curve`, `host_threads`) that CI runs.
 - Benchmarks (`cargo bench -p lamlet --bench embed`), with no dependencies. With `-- --gate`, which CI runs, they
   check that checking and evaluation scale linearly and that fixed workloads take no more VM instructions.
+- `Engine` checks `std` once and starts each check from that state (`lamlet::Prelude`). Checking a small
+  document that imports `std` is about 8.5× faster (1.14 ms to 0.13 ms), and a 1,000-line one about twice as
+  fast. A document without `std` is about 10 µs slower (29 µs to 39 µs). Results are identical to checking
+  from scratch, which a test compares over every fixture.
 - An in-tree fuzzer (`crates/lamlet/tests/fuzz.rs`) and hostile-input tests (`crates/lamlet/tests/limits.rs`).
 - `check_source` and `SourceFile::with_origin`: diagnostics can point into a larger host file.
 - Continuous integration: tests, clippy, rustdoc, and a check that the `lamlet` library has no dependencies.

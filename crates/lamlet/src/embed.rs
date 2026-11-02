@@ -182,6 +182,16 @@ pub struct Engine {
     natives: Rc<NativeRegistry>,
     options: Options,
     limits: Limits,
+    /// `std` checked once, for full checks (`[0]`) and interface checks (`[1]`). Cleared whenever the resolver,
+    /// natives, or options change, and rebuilt when the resolver's `std` source changes.
+    preludes: std::cell::RefCell<[Option<CachedPrelude>; 2]>,
+}
+
+struct CachedPrelude {
+    std_hash: Option<u64>,
+    /// `None` when `std` cannot be preloaded; checks then start fresh.
+    prelude: Option<Rc<crate::Prelude>>,
+    natives: Rc<NativeRegistry>,
 }
 
 impl Default for Engine {
@@ -198,18 +208,21 @@ impl Engine {
             natives: Rc::new(NativeRegistry::new()),
             options: Options::default(),
             limits: Limits::default(),
+            preludes: Default::default(),
         }
     }
 
     /// Replace the package resolver. A `MemoryResolver` keeps `std` available unless it replaces it.
     pub fn set_resolver(&mut self, resolver: impl Resolver + 'static) -> &mut Engine {
         self.resolver = Rc::new(resolver);
+        *self.preludes.get_mut() = Default::default();
         self
     }
 
     /// The native registry, for registering host functions and types. Documents and instances created
     /// earlier keep the registry they were made with.
     pub fn natives_mut(&mut self) -> &mut NativeRegistry {
+        *self.preludes.get_mut() = Default::default();
         Rc::make_mut(&mut self.natives)
     }
 
@@ -220,6 +233,7 @@ impl Engine {
     /// Checking options: whether every native declaration must be backed by a registered implementation, and
     /// the budgets of static preparation.
     pub fn options_mut(&mut self) -> &mut Options {
+        *self.preludes.get_mut() = Default::default();
         &mut self.options
     }
 
@@ -230,23 +244,47 @@ impl Engine {
 
     /// Check a document and prepare its static regions. `Pure` and `Static` natives may run during
     /// preparation.
+    ///
+    /// The engine checks `std` once and starts every check from that state, so checking many documents does not
+    /// check `std` again each time. The result is the same as checking from scratch.
     pub fn check(&self, file: SourceFile) -> Result<Document, Error> {
-        self.check_with(file, self.natives.clone(), &self.options)
+        self.check_mode(file, false)
     }
 
     /// Check a document against native metadata only, with no implementation called and none required:
     /// the build-time check. A static region (`[% ...]`) that calls a native cannot be prepared without its
     /// implementation, so it fails this check; runtime calls check against the metadata.
     pub fn check_interface(&self, file: SourceFile) -> Result<Document, Error> {
-        let options = Options { require_linked: false, ..self.options.clone() };
-        self.check_with(file, Rc::new(self.natives.interface_only()), &options)
+        self.check_mode(file, true)
     }
 
-    fn check_with(&self, file: SourceFile, natives: Rc<NativeRegistry>, options: &Options) -> Result<Document, Error> {
+    fn check_mode(&self, file: SourceFile, interface: bool) -> Result<Document, Error> {
+        let name = file.name.clone();
         guard("checking", || {
-            let inner = crate::check_source(file.into_source(), self.resolver.clone(), natives, options)?;
-            Ok(Document { inner })
+            let (prelude, natives, options) = self.prelude(interface);
+            let source = file.into_source();
+            let inner = match prelude {
+                Some(p) => p.check(source)?,
+                None => crate::check_source(source, self.resolver.clone(), natives, &options)?,
+            };
+            Ok(Document { inner, name })
         })
+    }
+
+    /// The preloaded `std` for full or interface checks, built on first use, with the natives and options
+    /// it was built with.
+    fn prelude(&self, interface: bool) -> (Option<Rc<crate::Prelude>>, Rc<NativeRegistry>, Options) {
+        let options = if interface { Options { require_linked: false, ..self.options.clone() } } else { self.options.clone() };
+        let std_hash = self.resolver.resolve("std").map(|p| crate::fnv1a(p.source.as_bytes()));
+        let mut preludes = self.preludes.borrow_mut();
+        let slot = &mut preludes[interface as usize];
+        if !matches!(slot, Some(c) if c.std_hash == std_hash) {
+            let natives = if interface { Rc::new(self.natives.interface_only()) } else { self.natives.clone() };
+            let prelude = std_hash.and_then(|_| crate::Prelude::new(self.resolver.clone(), natives.clone(), &options)).map(Rc::new);
+            *slot = Some(CachedPrelude { std_hash, prelude, natives });
+        }
+        let c = slot.as_ref().expect("the prelude slot was just filled");
+        (c.prelude.clone(), c.natives.clone(), options)
     }
 
     /// A new runtime instance of a checked document, linked against this engine's natives.
@@ -314,6 +352,7 @@ impl fmt::Debug for Binding {
 /// A checked and prepared document.
 pub struct Document {
     inner: crate::Document,
+    name: String,
 }
 
 impl Document {
@@ -1052,8 +1091,7 @@ impl fmt::Debug for Engine {
 
 impl fmt::Debug for Document {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let name = self.inner.sources.files.first().map(|s| s.name.as_str()).unwrap_or("");
-        write!(f, "Document({:?}, {} regions, fingerprint {:016x})", name, self.inner.regions.len(), self.fingerprint())
+        write!(f, "Document({:?}, {} regions, fingerprint {:016x})", self.name, self.inner.regions.len(), self.fingerprint())
     }
 }
 

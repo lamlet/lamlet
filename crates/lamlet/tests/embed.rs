@@ -306,3 +306,104 @@ fn data_round_trips_fixture_values() {
     assert!(values > 250, "only {} values round-tripped ({} functions skipped)", values, functions);
 }
 
+
+// ---------------------------------------------------------------------------------------------------------
+// The engine checks std once; a check from that state must equal a check from scratch.
+
+fn fixture_resolver() -> MemoryResolver {
+    let mut resolver = MemoryResolver::new();
+    resolver.add("fx-ctl", "$[Import std] $[Macro !unless {{c a b} {!std::if c b a}}] $[Macro !_hidden {{} 0}] $[# limit 10]", Exports::All);
+    resolver.add("fx-shapes", "$[Import* std] $[# Point [% {Struct {' {Field \"x\" Int} {Field \"y\" Int}}}]] $[# origin {: [% {. x 0 y 0}] Point}]", Exports::All);
+    resolver
+}
+
+/// Everything a host can observe about a checked document, as text.
+fn observe(doc: &lamlet::Document, inputs: &[(String, i64)]) -> Vec<String> {
+    let mut out: Vec<String> = doc
+        .prepared()
+        .iter()
+        .map(|p| match p {
+            lamlet::PreparedSpan::Text { text, .. } => format!("text {:?}", text),
+            lamlet::PreparedSpan::Comment { text, .. } => format!("comment {:?}", text),
+            lamlet::PreparedSpan::Declaration { region, .. } => format!("declaration {}", region),
+            lamlet::PreparedSpan::Value { region, ty, value, .. } => format!("value {} {} {}", region, ty, display(value)),
+            lamlet::PreparedSpan::Residual { region, ty, .. } => format!("residual {} {}", region, ty),
+        })
+        .collect();
+    out.push(format!("dependencies {:?}", doc.dependencies));
+    out.push(format!("fingerprint {:016x}", doc.program.fingerprint));
+    let mut reqs: Vec<String> = doc.program.native_requirements.iter().map(|r| r.api_id.clone()).collect();
+    reqs.sort();
+    out.push(format!("natives {:?}", reqs));
+    out.push(format!("inits {:?}", doc.program.package_inits.iter().map(|p| p.0.clone()).collect::<Vec<_>>()));
+    out.extend(doc.static_bindings.iter().map(|b| format!("binding {} : {} = {}", b.name, b.ty, display(&b.value))));
+    let natives = std::rc::Rc::new(NativeRegistry::new());
+    let mut inst = lamlet::Instance::new(doc.program.clone(), natives).unwrap();
+    let mut ctx = lamlet::HostContext::default();
+    for (k, v) in inputs {
+        ctx = ctx.with_input(k, Value::Int(*v));
+    }
+    out.push(match inst.evaluate(ctx, Limits { max_instructions: 5_000_000, ..Limits::default() }) {
+        Ok(vs) => format!("evaluates to {:?}", vs.iter().map(|(i, v)| format!("{} {}", i, display(v))).collect::<Vec<_>>()),
+        Err(e) => format!("fails: {}", e.to_diagnostic().render(&doc.sources)),
+    });
+    out
+}
+
+#[test]
+fn checking_from_the_preloaded_std_equals_checking_from_scratch() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures");
+    let mut engine = Engine::new();
+    engine.set_resolver(fixture_resolver());
+    let mut paths: Vec<_> = std::fs::read_dir(&dir).unwrap().map(|f| f.unwrap().path()).collect();
+    paths.sort();
+    let mut compared = 0;
+    for path in paths.iter().filter(|p| p.extension().is_some_and(|x| x == "lam")) {
+        let name = path.file_name().unwrap().to_string_lossy().to_string();
+        let text = std::fs::read_to_string(path).unwrap();
+        let inputs: Vec<(String, i64)> = text
+            .lines()
+            .filter_map(|l| l.strip_prefix("input: ").and_then(|r| r.split_once('=')))
+            .map(|(k, v)| (k.to_string(), v.trim().parse().unwrap()))
+            .collect();
+        let fresh = lamlet::check_document(&name, &text, fixture_resolver().into_rc(), std::rc::Rc::new(NativeRegistry::new()), &Options::default());
+        let preloaded = engine.check(SourceFile::new(name.clone(), text.clone()));
+        match (fresh, preloaded) {
+            (Ok(a), Ok(b)) => assert_eq!(observe(&a, &inputs), observe(b.internal(), &inputs), "{}", name),
+            (Err(a), Err(b)) => assert_eq!(a.render(), b.render(), "{}", name),
+            (a, b) => panic!("{}: fresh ok = {}, preloaded ok = {}", name, a.is_ok(), b.is_ok()),
+        }
+        compared += 1;
+    }
+    assert!(compared > 90, "{}", compared);
+}
+
+#[test]
+fn a_document_without_std_does_not_depend_on_it() {
+    let engine = Engine::new();
+    let doc = engine.check(SourceFile::new("k.lam", "${K::add 1 2}")).unwrap();
+    assert_eq!(doc.dependencies().iter().map(|d| d.0.as_str()).collect::<Vec<_>>(), ["K"]);
+    let program = &doc.internal().program;
+    assert!(program.package_inits.is_empty() && program.native_requirements.is_empty());
+    // A later check that imports std gets it.
+    let doc = engine.check(SourceFile::new("s.lam", "$[Import* std]${+ 1 2}")).unwrap();
+    assert!(doc.dependencies().iter().any(|d| d.0 == "std"));
+}
+
+#[test]
+fn the_preloaded_std_follows_changes_to_the_engine() {
+    let mut engine = Engine::new();
+    assert!(engine.check(SourceFile::new("a.lam", "$[Import* std]${double 2}")).is_err());
+    // A resolver with a different std is picked up.
+    let mut resolver = MemoryResolver::new();
+    resolver.add("std", "$[# double {^ {x} {K::add x x}}]", Exports::All);
+    engine.set_resolver(resolver);
+    let doc = engine.check(SourceFile::new("a.lam", "$[Import* std]$[# four [% {double 2}]]$four")).unwrap();
+    assert_eq!(doc.render(text).unwrap(), "4");
+    // A std that does not check is reported where the document imports it.
+    let mut broken = MemoryResolver::new();
+    broken.add("std", "$[# oops {K::add 1 true}]", Exports::All);
+    engine.set_resolver(broken);
+    let err = engine.check(SourceFile::new("b.lam", "$[Import* std]")).unwrap_err();
+    assert!(err.to_string().contains("while checking package `std`"), "{}", err);
+}

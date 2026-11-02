@@ -145,8 +145,29 @@ pub fn check_source(
     natives: Rc<NativeRegistry>,
     options: &Options,
 ) -> Result<Document, Failure> {
-    let natives_fp = natives.fingerprint();
-    let mut s = Session::new(resolver, natives, options.require_linked, options.static_limits.clone());
+    check_in(Session::new(resolver, natives, options.require_linked, options.static_limits.clone()), file)
+}
+
+/// A checking session with `std` already checked, for checking many documents with the same resolver, natives,
+/// and options. Checking from it gives the same result as `check_source`, without checking `std` again.
+pub struct Prelude {
+    session: Session,
+}
+
+impl Prelude {
+    /// `None` when `std` cannot be preloaded (it fails to check, cannot be resolved, or imports other packages).
+    pub fn new(resolver: Rc<dyn Resolver>, natives: Rc<NativeRegistry>, options: &Options) -> Option<Prelude> {
+        Session::prelude(resolver, natives, options.require_linked, options.static_limits.clone()).map(|session| Prelude { session })
+    }
+
+    /// Check a document, starting from the preloaded state.
+    pub fn check(&self, file: source::SourceFile) -> Result<Document, Failure> {
+        check_in(self.session.fork(), file)
+    }
+}
+
+fn check_in(mut s: Session, file: source::SourceFile) -> Result<Document, Failure> {
+    let natives_fp = s.natives.fingerprint();
     let name = file.name.clone();
     let source_hash = fnv1a(file.text.as_bytes());
     let source_len = file.text.len();

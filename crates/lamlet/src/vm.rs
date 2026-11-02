@@ -115,6 +115,14 @@ impl Vm {
         }
     }
 
+    /// A new VM with the same stage, natives, limits, and globals, and nothing executing. Values are immutable,
+    /// so the globals are shared, not copied.
+    pub fn fork(&self) -> Vm {
+        let mut vm = Vm::new(self.stage, self.natives.clone(), self.limits.clone());
+        vm.globals = self.globals.clone();
+        vm
+    }
+
     /// Release all execution roots (stack, frames, globals, outputs).
     pub fn reset(&mut self) {
         self.stack = Vec::new();
