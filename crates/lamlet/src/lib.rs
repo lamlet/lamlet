@@ -14,6 +14,7 @@ pub mod bytecode;
 pub mod check;
 pub mod compile;
 pub mod core;
+pub mod embed;
 pub mod host;
 pub mod package;
 pub mod source;
@@ -133,20 +134,35 @@ pub fn check_document(
     natives: Rc<NativeRegistry>,
     options: &Options,
 ) -> Result<Document, Failure> {
+    check_source(source::SourceFile::new(name, source), resolver, natives, options)
+}
+
+/// Check (and statically prepare) a document given as a source file, which may carry an origin in a larger
+/// host file (`SourceFile::with_origin`).
+pub fn check_source(
+    file: source::SourceFile,
+    resolver: Rc<dyn Resolver>,
+    natives: Rc<NativeRegistry>,
+    options: &Options,
+) -> Result<Document, Failure> {
     let natives_fp = natives.fingerprint();
     let mut s = Session::new(resolver, natives, options.require_linked, options.static_limits.clone());
-    let file = s.sources.add(name, source);
+    let name = file.name.clone();
+    let source_hash = fnv1a(file.text.as_bytes());
+    let source_len = file.text.len();
+    let name = name.as_str();
+    let file = s.sources.add_file(file);
     let fail = |d: Diagnostic, s: Session| Failure { diagnostics: vec![d], sources: Rc::new(s.sources) };
     let out = match check_module(&mut s, file, ModuleMode::Document, name) {
         Ok(o) => o,
         Err(d) => return Err(fail(d, s)),
     };
-    let span = Span::new(file, 0, source.len());
+    let span = Span::new(file, 0, source_len);
     let entry = match compile::compile_entry(&format!("<document {}>", name), &out.steps, span) {
         Ok(c) => c,
         Err(m) => return Err(fail(Diagnostic::new(DiagKind::Static, m, Some(span)), s)),
     };
-    let mut fp = format!("lamlet {} bytecode {} natives {:016x} source {:016x}", LANGUAGE_VERSION, bytecode::BYTECODE_VERSION, natives_fp, fnv1a(source.as_bytes()));
+    let mut fp = format!("lamlet {} bytecode {} natives {:016x} source {:016x}", LANGUAGE_VERSION, bytecode::BYTECODE_VERSION, natives_fp, source_hash);
     for (n, v, h) in &s.dependencies {
         fp.push_str(&format!(" dep {}@{}:{:016x}", n, v, h));
     }
@@ -285,12 +301,28 @@ impl Instance {
         self.vm.limits = limits;
     }
 
+    /// The host context used by the `*_current` methods; it persists between calls.
+    pub(crate) fn context_mut(&mut self) -> &mut HostContext {
+        &mut self.vm.context
+    }
+
+    pub(crate) fn set_limits(&mut self, limits: Limits) {
+        self.vm.limits = limits;
+    }
+
     /// Initialize package bindings once for this execution context.
     pub fn initialize(&mut self, ctx: HostContext, limits: Limits) -> Result<(), RuntimeError> {
         if self.initialized {
             return Ok(());
         }
         self.prepare_vm(ctx, limits);
+        self.initialize_current()
+    }
+
+    fn initialize_current(&mut self) -> Result<(), RuntimeError> {
+        if self.initialized {
+            return Ok(());
+        }
         for (_, code) in self.program.package_inits.clone() {
             if let Err(e) = self.vm.run_code(code) {
                 for g in self.vm.globals.iter_mut() {
@@ -306,8 +338,13 @@ impl Instance {
     /// Evaluate the whole document entry with fresh local bindings, returning each expression region's value
     /// in source order. Fails atomically: no partial results are returned.
     pub fn evaluate(&mut self, ctx: HostContext, limits: Limits) -> Result<Vec<(u32, Value)>, RuntimeError> {
-        self.initialize(ctx.clone(), limits.clone())?;
         self.prepare_vm(ctx, limits);
+        self.evaluate_current()
+    }
+
+    /// `evaluate` with the instance's current context and limits.
+    pub(crate) fn evaluate_current(&mut self) -> Result<Vec<(u32, Value)>, RuntimeError> {
+        self.initialize_current()?;
         self.vm.take_outputs();
         let r = self.vm.run_code(self.program.entry.clone());
         let outputs = self.vm.take_outputs();
@@ -316,8 +353,13 @@ impl Instance {
 
     /// Call a function value (for example a static binding of the document) with explicit arguments.
     pub fn call(&mut self, f: &Value, args: Vec<Value>, ctx: HostContext, limits: Limits) -> Result<Value, RuntimeError> {
-        self.initialize(ctx.clone(), limits.clone())?;
         self.prepare_vm(ctx, limits);
+        self.call_current(f, args)
+    }
+
+    /// `call` with the instance's current context and limits.
+    pub(crate) fn call_current(&mut self, f: &Value, args: Vec<Value>) -> Result<Value, RuntimeError> {
+        self.initialize_current()?;
         self.vm.call_value(f.clone(), args)
     }
 

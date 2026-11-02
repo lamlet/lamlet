@@ -26,7 +26,44 @@ JSON encoding of values:
 
 Exit codes are nonzero on failure, and diagnostics go to stderr.
 
-## Library (`crates/lamlet`, no dependencies)
+## Embedding surface (`lamlet::embed`)
+
+The supported API for hosts. Everything a host needs is re-exported from this one module.
+
+```rust
+use lamlet::embed::*;
+
+let mut engine = Engine::new();                               // std package + std natives
+engine.natives_mut().register_fn("host.counts/leaves", vec![TypeDesc::String], TypeDesc::Int,
+    Availability::Pure, |_ctx, args| Ok(Value::Int(42)))?;     // Pure: callable during preparation
+let doc = engine.check(SourceFile::new("story.md", text).at(40, 1))?; // diagnostics point at line 40+
+
+for part in doc.parts() {                                      // Text, Comment, Declaration, Region
+    if let Part::Region { region, value } = part { /* value: None = residual (runtime) */ }
+}
+let prose = doc.render(text)?;                                 // values spliced in; declaration-only lines dropped
+let mut inst = engine.instance(&doc)?;
+inst.set_input("clock", 1.25)?;                                // inputs persist between calls
+let prose = doc.render_with(&mut inst, text)?;                 // evaluates residual regions first
+let curve = doc.binding("ease")?;                              // static top-level binding
+let y: f64 = inst.call_typed(&curve, (0.5,))?;                 // args checked against the binding's type
+let data = Data::from_value(&value)?;                          // plain, Send + Sync; no functions/opaques
+```
+
+- **Static or residual.** A region is computed during the check when it is `$name` (a static binding) or
+  `$[% e]`. A `${...}` region is an application and is evaluated at runtime, even with no inputs.
+- **Errors.** One `Error` type with `kind()` (`Check`, `Link`, `Runtime`, `Value`), `diagnostics()`,
+  `locations()`, and `Display`.
+- **Conversions.** `IntoLamlet`/`FromLamlet` for `()`, `bool`, `i64`, `f64` (finite only), `String`, `Vec<T>`,
+  `Option<T>` (std's `<none, some>`), `(A, B)` (std's `{first, second}`), `Value`, and `Data`. Records:
+  `record().field("x", 1i64).build()?`.
+- **Build-time check.** `engine.check_interface(file)` uses native metadata only. A `[% ...]` that calls a
+  native fails it, because preparation needs the implementation.
+
+## Library internals (`crates/lamlet`, no dependencies)
+
+The functions below are what `lamlet::embed` is built on. They are not covered by the stability promise.
+
 
 ```rust
 use lamlet::*;                       // check_document, Instance, NativeRegistry, MemoryResolver, HostContext, Limits, Value, Exports

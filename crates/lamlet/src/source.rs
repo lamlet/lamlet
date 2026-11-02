@@ -28,6 +28,8 @@ pub struct SourceFile {
     pub name: String,
     pub text: String,
     line_starts: Vec<usize>,
+    /// 1-based line and column of the text's first character in the host's file (1, 1 for a whole file).
+    origin: (usize, usize),
 }
 
 impl SourceFile {
@@ -39,7 +41,14 @@ impl SourceFile {
                 line_starts.push(i + 1);
             }
         }
-        SourceFile { name: name.into(), text, line_starts }
+        SourceFile { name: name.into(), text, line_starts, origin: (1, 1) }
+    }
+
+    /// The same text, positioned at a 1-based line and column of a larger host file: display positions
+    /// (diagnostics, locations) are reported in the host file's coordinates. Byte offsets are unchanged.
+    pub fn with_origin(mut self, line: usize, column: usize) -> SourceFile {
+        self.origin = (line.max(1), column.max(1));
+        self
     }
 
     /// 1-based line and column (column counted in Unicode scalars).
@@ -51,7 +60,9 @@ impl SourceFile {
         };
         let start = self.line_starts[line];
         let col = self.text[start..offset].chars().count();
-        (line + 1, col + 1)
+        let (origin_line, origin_col) = self.origin;
+        let col = if line == 0 { col + origin_col - 1 } else { col };
+        (line + origin_line, col + 1)
     }
 }
 
@@ -64,6 +75,10 @@ pub struct SourceMap {
 impl SourceMap {
     pub fn add(&mut self, name: impl Into<String>, text: impl Into<String>) -> u32 {
         self.files.push(SourceFile::new(name, text));
+        (self.files.len() - 1) as u32
+    }
+    pub fn add_file(&mut self, file: SourceFile) -> u32 {
+        self.files.push(file);
         (self.files.len() - 1) as u32
     }
     pub fn file(&self, id: u32) -> &SourceFile {

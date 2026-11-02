@@ -13,6 +13,11 @@ bytecode version (`BYTECODE_VERSION`) are tracked separately from the crate vers
 
 ### Added
 
+- `lamlet::embed`, the embedding surface for host programs: `Engine`, `SourceFile` (with a position in a host
+  file), `Document::parts`/`render`/`render_with`/`binding`, `Instance` with persistent inputs and typed calls
+  (`call_typed`), one `Error` type, `IntoLamlet`/`FromLamlet` conversions, and `Data`, a plain `Send + Sync`
+  copy of values.
+- `check_source` and `SourceFile::with_origin`: diagnostics can point into a larger host file.
 - Continuous integration: tests, clippy, rustdoc, and a check that the `lamlet` library has no dependencies.
 
 ### Fixed

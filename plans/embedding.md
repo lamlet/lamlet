@@ -79,6 +79,29 @@ offline from a vendored copy, and runs `run_source`.
 
 ## Phase 1: the embedding surface
 
+**Status: implemented (2026-11-01)** in `crates/lamlet/src/embed.rs`, tested by `crates/lamlet/tests/embed.rs`
+(17 tests). It differs from the sketch below in these ways:
+
+- **Names.** The pieces of a document are `Part` (not `Span`, which the crate already uses for byte ranges), and
+  positions are `Location`s with line, column, and byte offsets. The registry is reached with
+  `engine.natives_mut()`, and the resolver set with `engine.set_resolver(...)`; there are no `EngineOptions`.
+- **Inputs live on the instance.** `inst.set_input(key, v)`, `grant`, and `set_limits` persist between calls,
+  so `call_typed(&f, args)` takes no inputs, and a call per frame changes one input instead of rebuilding a
+  context.
+- **Bindings hold values.** `doc.binding(name)` returns the prepared value. Resolving bindings by name inside an
+  instance waits for phase 2, where it is needed.
+- **Not done in this phase:**
+  - JSON stays in the CLI (open question 2).
+  - `Data` has no opaque handles: `Data::from_value` refuses opaque values, which typed handles in phase 3 cover.
+  - The CLI is not rewritten yet (phase 7).
+- **A gap found while testing.** `check_interface` cannot prepare a `[% ...]` that calls a native, because
+  preparation needs the implementation, so such documents fail the build-time check. Fixing it means letting
+  interface checks leave those regions unprepared (a checker change), or requiring build tools to register
+  `Pure` implementations. See open question 5.
+- **A fact hosts need.** Only `$name` (a static binding) and `$[% e]` regions are prepared during the check. A
+  `${...}` region is an application and stays residual even without runtime inputs. `docs/embedding.md`
+  (phase 7) must say so.
+
 A small facade over the existing modules, `lamlet::embed`:
 
 ```rust
@@ -262,7 +285,12 @@ measured against a baseline.
    (simpler, repeats preparation work)? Leaning to the second, with the first as an optimization.
 2. **JSON in the library.** A `json` feature with `serde_json`, or a small dependency-free writer and reader in
    the core? The zero-dependency claim argues for the latter.
-3. **`Document::render` policy.** Is the declaration line rule (no blank line left behind) right for every host,
-   or should `render` take a policy value from the start?
+3. **`Document::render` policy.** Is the declaration line rule right for every host, or should `render` take a
+   policy value? As implemented, a line holding only declarations, comments, and whitespace is removed with its
+   line break.
 4. **Crate split.** Does the facade live in `lamlet` (`lamlet::embed`) or in a thin `lamlet-embed` crate that
-   re-exports a stable subset? One crate is simpler; two make the semver boundary physical.
+   re-exports a stable subset? One crate is simpler; two make the semver boundary physical. Phase 1 chose
+   `lamlet::embed`.
+5. **Static natives in build-time checks.** Should `check_interface` leave a `[% ...]` that needs a native
+   unprepared (a checker change), or should build tools register `Pure` implementations? The first keeps build
+   scripts free of host code.
