@@ -16,9 +16,7 @@ ${table {' "Bed" "Plant"} {' {' "1" "rose"} {' "2" "fern"}}}
 1. first
 2. second
 
-```lam
-$$[# x 1]
-```
+${codeBlock "lam" "$[# x 1]"}
 
 ## Next {#next}
 

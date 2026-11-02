@@ -5,12 +5,13 @@
 //! The subset:
 //!
 //! - **Blocks:** ATX headings (`## Title {#id key=value}`), paragraphs, bullet and ordered lists (nested by
-//!   indentation), fenced code blocks (```` ``` ```` and `~~~`), and GitHub tables.
+//!   indentation), and GitHub tables.
 //! - **Inlines:** `*emphasis*`, `**strong**` (and `_`/`__`), `` `code` ``, `[links](href)`, `![images](src
 //!   "title")`, `<autolinks>`, backslash escapes, and hard line breaks (two spaces or `\` before a newline).
 //!
-//! Not in the subset (written as text): block quotes, thematic breaks, setext headings, HTML, reference links,
-//! and indented code blocks.
+//! Code blocks come only from the `content` package's `codeBlock`: a fence (```` ``` ```` or `~~~`) is not Lamlet
+//! syntax, and a fence line in parsed prose is an error that says so. Not in the subset either (written as text):
+//! block quotes, thematic breaks, setext headings, HTML, reference links, and indented code blocks.
 //!
 //! While the prose is parsed, each region stands in it as one character of Unicode's private use area, so the
 //! parser never sees region values as markup.
@@ -28,15 +29,20 @@ pub fn parse(pieces: Vec<Piece>) -> Result<Vec<Block>, Error> {
     let mut src = String::new();
     let mut slots = Vec::new();
     let mut at = None;
+    // The position of each line of `src`: that of the first piece on it.
+    let mut lines_at: Vec<Option<Location>> = Vec::new();
     for p in pieces {
+        if src.is_empty() || src.ends_with('\n') {
+            lines_at.push(piece_at(&p));
+        }
         match p {
             Piece::Inline(Inline::Raw { format, text, at: a }) if format == COMMONMARK => {
                 if at.is_none() {
-                    at = a;
+                    at = a.clone();
                 }
                 // A source character in the private use area would be read as a region.
                 if text.chars().any(is_slot) {
-                    return Err(Error::at(&at, "the prose holds a character of Unicode's private use area (U+E000 to U+F8FF), which parsed prose reserves"));
+                    return Err(Error::at(&a, "the prose holds a character of Unicode's private use area (U+E000 to U+F8FF), which parsed prose reserves"));
                 }
                 src.push_str(&text);
             }
@@ -50,9 +56,24 @@ pub fn parse(pieces: Vec<Piece>) -> Result<Vec<Block>, Error> {
             }
         }
     }
-    let p = Parser { slots, at };
     let lines: Vec<&str> = src.split('\n').collect();
+    // Code blocks are `codeBlock` regions; a fence is not Lamlet syntax.
+    if let Some(i) = lines.iter().position(|l| is_fence(l)) {
+        return Err(Error::at(
+            lines_at.get(i).unwrap_or(&at),
+            "a fenced code block (``` or ~~~) is not Lamlet syntax: write the block as ${codeBlock \"lang\" \"code\"} (the `content` package)",
+        ));
+    }
+    let p = Parser { slots, at };
     p.blocks(&lines)
+}
+
+fn piece_at(p: &Piece) -> Option<Location> {
+    match p {
+        Piece::Inline(i) => i.at().cloned(),
+        Piece::Block(Block::CodeBlock { at, .. } | Block::Raw { at, .. }) => at.clone(),
+        Piece::Block(_) => None,
+    }
 }
 
 fn is_slot(c: char) -> bool {
@@ -66,11 +87,6 @@ struct Parser {
 
 fn indent(line: &str) -> usize {
     line.chars().take_while(|c| *c == ' ').count()
-}
-
-fn strip_indent(line: &str, n: usize) -> &str {
-    let k = indent(line).min(n);
-    &line[k..]
 }
 
 /// A list marker at the start of a line: (ordered, width of marker plus following spaces).
@@ -104,25 +120,11 @@ fn list_marker(line: &str) -> Option<(bool, usize)> {
     Some((ordered, ind + marker_len + spaces))
 }
 
-fn fence(line: &str) -> Option<(char, usize, &str)> {
+/// Whether a line opens a fenced code block (three or more backticks or tildes), which parsed prose refuses.
+fn is_fence(line: &str) -> bool {
     let ind = indent(line);
-    if ind > 3 {
-        return None;
-    }
     let rest = &line[ind..];
-    let c = rest.chars().next()?;
-    if c != '`' && c != '~' {
-        return None;
-    }
-    let n = rest.chars().take_while(|x| *x == c).count();
-    if n < 3 {
-        return None;
-    }
-    let info = rest[n..].trim();
-    if c == '`' && info.contains('`') {
-        return None;
-    }
-    Some((c, n, info))
+    ind <= 3 && (rest.starts_with("```") || rest.starts_with("~~~"))
 }
 
 fn heading(line: &str) -> Option<(u8, &str)> {
@@ -220,7 +222,7 @@ fn heading_attrs(text: &str) -> (&str, Option<String>, Attrs) {
 }
 
 fn starts_block(line: &str) -> bool {
-    heading(line).is_some() || fence(line).is_some() || list_marker(line).is_some_and(|(_, w)| line.len() > w || line.trim().len() > 1)
+    heading(line).is_some() || list_marker(line).is_some_and(|(_, w)| line.len() > w || line.trim().len() > 1)
 }
 
 impl Parser {
@@ -252,22 +254,6 @@ impl Parser {
             } else if let Some(b) = self.block_slot(line) {
                 out.push(b);
                 i += 1;
-            } else if let Some((c, n, info)) = fence(line) {
-                let ind = indent(line);
-                let mut body = Vec::new();
-                i += 1;
-                while i < lines.len() {
-                    if let Some((c2, n2, rest)) = fence(lines[i]) {
-                        if c2 == c && n2 >= n && rest.is_empty() {
-                            i += 1;
-                            break;
-                        }
-                    }
-                    body.push(strip_indent(lines[i], ind));
-                    i += 1;
-                }
-                let text = self.plain(&body.join("\n"))?;
-                out.push(Block::CodeBlock { lang: info.split_whitespace().next().unwrap_or("").to_string(), text, at: self.at.clone() });
             } else if let Some((level, text)) = heading(line) {
                 let (title, id, attrs) = heading_attrs(text);
                 out.push(Block::Heading { level, id, attrs, inlines: self.inlines(title)? });

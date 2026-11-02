@@ -67,9 +67,13 @@ The document's text is handled in one of two ways:
   block, and any other region is part of the text around it.
 
 The CommonMark subset: ATX headings with optional attributes (`## Title {#id key=value}`), paragraphs, bullet and
-numbered lists (nested by indentation), fenced code blocks, GitHub tables, emphasis, strong emphasis, code spans,
-links, images, autolinks, backslash escapes, and hard line breaks. Block quotes, thematic breaks, setext
-headings, HTML, reference links, and indented code blocks are written as text.
+numbered lists (nested by indentation), GitHub tables, emphasis, strong emphasis, code spans, links, images,
+autolinks, backslash escapes, and hard line breaks. Block quotes, thematic breaks, setext headings, HTML,
+reference links, and indented code blocks are written as text.
+
+Code blocks are written with `codeBlock` (section 4), not with fences: ```` ``` ```` is Markdown, not Lamlet
+syntax, so parsed prose reports a fence line as an error at that line. (In copied prose, a fence is part of the
+markup you wrote and passes through unchanged, like the rest of it.)
 
 ### Escaping
 

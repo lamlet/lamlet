@@ -24,6 +24,8 @@ implementation differs from the text below:
 - Parsed prose is a CommonMark subset (`lamlet_doc::prose` lists it), not all of CommonMark, and it lives in
   `lamlet-doc` itself: it needs no dependency, so a separate crate was not worth it.
 - The Markdown backend does not write heading ids, since CommonMark has no syntax for them.
+- Parsed prose has no fenced code blocks: a fence is Markdown, not Lamlet syntax, so it is an error at its line,
+  and code blocks are `codeBlock` regions.
 - `--align ORIGINAL` is given on the translation's build: `lamlet build zh.lam --to speech --align en.lam`.
 
 Tests: `crates/lamlet-doc/tests/identical.rs` (the text backend against the renderer it replaced, on every

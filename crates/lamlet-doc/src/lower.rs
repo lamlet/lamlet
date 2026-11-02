@@ -110,6 +110,16 @@ fn lower_value(region: &Region, v: &Value) -> Result<Vec<Piece>, Error> {
     })
 }
 
+/// The position of line `n` (from 0) of a text part that starts at `at`. Lines after the first start at
+/// column 1. The byte offsets stay the part's own: messages do not use them, and `$$` in the source makes
+/// the text shorter than its span.
+fn line_at(at: &Location, n: usize) -> Location {
+    if n == 0 {
+        return at.clone();
+    }
+    Location { line: at.line + n, column: 1, end_line: at.line + n, end_column: 1, ..at.clone() }
+}
+
 /// Whether a piece is prose (`Raw` in the prose format), which adjacent prose joins.
 fn is_prose(p: &Piece, format: &str) -> bool {
     matches!(p, Piece::Inline(Inline::Raw { format: f, .. }) if f == format)
@@ -128,13 +138,15 @@ struct Lines<'f> {
 impl Lines<'_> {
     fn text(&mut self, text: &str, at: &Location) {
         let mut rest = text;
+        let mut line = 0;
         while let Some(i) = rest.find('\n') {
-            self.raw(&rest[..=i], at);
+            self.raw(&rest[..=i], &line_at(at, line));
             self.end_line();
             rest = &rest[i + 1..];
+            line += 1;
         }
         if !rest.is_empty() {
-            self.raw(rest, at);
+            self.raw(rest, &line_at(at, line));
         }
     }
 
@@ -166,8 +178,10 @@ impl Lines<'_> {
         let line = std::mem::take(&mut self.line);
         if !blank {
             for piece in line {
+                // Parsed prose keeps one piece per line, so the parser knows each line's position.
                 let format = self.format;
-                match (self.out.last_mut().filter(|p| is_prose(p, format)), piece) {
+                let joins = format != COMMONMARK;
+                match (self.out.last_mut().filter(|p| joins && is_prose(p, format)), piece) {
                     (Some(Piece::Inline(Inline::Raw { text: last, .. })), Piece::Inline(Inline::Raw { text, format: f, .. })) if f == format => last.push_str(&text),
                     // The pieces of one value's text, split at its newlines above, join again.
                     (Some(Piece::Inline(Inline::Text { text: last, at: a })), Piece::Inline(Inline::Text { text, at: b })) if a.as_ref() == b.as_ref() => last.push_str(&text),
