@@ -796,6 +796,11 @@ impl<'s> Checker<'s> {
         self.depth += 1;
         let r = self.expr_inner(e);
         self.depth -= 1;
+        // Every expression's type stays within the type limits, so composing deep generic functions cannot build
+        // a type that later recursive passes (unification, display, cloning) would overflow the stack on.
+        if let Ok((t, _)) = &r {
+            self.s.tcx.check_bounds(t).map_err(|m| derr(DiagKind::Limit, m, e.span()))?;
+        }
         r
     }
 

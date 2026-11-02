@@ -22,11 +22,20 @@ bytecode version (`BYTECODE_VERSION`) are tracked separately from the crate vers
   `NativeRegistry::declarations` writes the matching `[NativeType]`/`[Native]` package. Typed opaque handles:
   `NativeType`, `Opaque<T>`, and `NativeRegistry::opaque`. `NativeCtx::input_as` reads a typed input.
 - `NativeEntry::doc`.
+- `lamlet::embed` catches panics and reports them as `ErrorKind::Internal`; an instance that panicked is
+  marked unusable. `Data` conversions refuse values nested deeper than the type limit.
+- An in-tree fuzzer (`crates/lamlet/tests/fuzz.rs`) and hostile-input tests (`crates/lamlet/tests/limits.rs`).
 - `check_source` and `SourceFile::with_origin`: diagnostics can point into a larger host file.
 - Continuous integration: tests, clippy, rustdoc, and a check that the `lamlet` library has no dependencies.
 
 ### Fixed
 
+- The type checker accepted recursive types formed by unifying two type variables, for example
+  `{^ {z} {!if c z {#node z}}}`. A host calling such a function could get an arbitrarily deep value. The occurs
+  check now covers that case and constraints added to a variable.
+- Documents could crash the host process with a stack overflow, through types that double in depth per binding
+  or through computed `Type` values. Types are now limited to 100 levels and 100,000 parts (spec §7.1), and a
+  violation is a `limit` diagnostic.
 - A runtime error raised by a call in tail position (a failing native or builtin, an arity mismatch) now points
   at that call. It used to point at the caller's call site, or at nothing.
 - Broken documentation link in `lamlet-present`; the `lamlet` CLI binary no longer collides with the `lamlet`

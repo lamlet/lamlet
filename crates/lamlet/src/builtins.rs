@@ -71,6 +71,14 @@ fn ty_value(t: TypeDesc) -> Value {
     Value::Type(Rc::new(t))
 }
 
+/// A `Type` built from other types, within the type nesting limit (spec §7.1).
+fn composite_type(t: TypeDesc) -> Result<Value, String> {
+    if t.deeper_than(crate::types::MAX_TYPE_DEPTH) {
+        return Err(format!("type nesting limit ({} levels) exceeded", crate::types::MAX_TYPE_DEPTH));
+    }
+    Ok(ty_value(t))
+}
+
 macro_rules! intrinsic {
     ($name:expr, $scheme:expr, $arity:expr, $run:expr) => {
         Intrinsic { name: $name, typing: Typing::Scheme($scheme), arity: $arity, run: $run }
@@ -181,13 +189,13 @@ pub static INTRINSICS: &[Intrinsic] = &[
     intrinsic!("debugString", "Fn([a], String)", 1, |a| v(Value::Str(Rc::from(display(&a[0]))))),
     intrinsic!("fail", "Fn([String], a)", 1, |a| Err(str_of(&a[0])?.to_string())),
     // Type descriptors: ordinary pure functions over Type data.
-    intrinsic!("listType", "Fn([Type], Type)", 1, |a| v(ty_value(TypeDesc::List(Rc::new(type_of(&a[0])?))))),
+    intrinsic!("listType", "Fn([Type], Type)", 1, |a| v(composite_type(TypeDesc::List(Rc::new(type_of(&a[0])?)))?)),
     intrinsic!("functionType", "Fn([List(Type), Type], Type)", 2, |a| {
         let args = list_of(&a[0])?.iter().map(|t| type_of(&t)).collect::<Result<Vec<_>, _>>()?;
-        v(ty_value(TypeDesc::Func(args, Rc::new(type_of(&a[1])?))))
+        v(composite_type(TypeDesc::Func(args, Rc::new(type_of(&a[1])?)))?)
     }),
-    intrinsic!("recordType", "Fn([List({name: String, type: Type})], Type)", 1, |a| v(ty_value(TypeDesc::Record(labeled(&a[0], "field")?)))),
-    intrinsic!("variantType", "Fn([List({name: String, type: Type})], Type)", 1, |a| v(ty_value(TypeDesc::Variant(labeled(&a[0], "alternative")?)))),
+    intrinsic!("recordType", "Fn([List({name: String, type: Type})], Type)", 1, |a| v(composite_type(TypeDesc::Record(labeled(&a[0], "field")?))?)),
+    intrinsic!("variantType", "Fn([List({name: String, type: Type})], Type)", 1, |a| v(composite_type(TypeDesc::Variant(labeled(&a[0], "alternative")?))?)),
 ];
 
 fn labeled(list: &Value, what: &str) -> Result<Vec<(Rc<str>, TypeDesc)>, String> {

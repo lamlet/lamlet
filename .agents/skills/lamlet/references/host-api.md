@@ -52,8 +52,14 @@ let data = Data::from_value(&value)?;                          // plain, Send + 
 
 - **Static or residual.** A region is computed during the check when it is `$name` (a static binding) or
   `$[% e]`. A `${...}` region is an application and is evaluated at runtime, even with no inputs.
-- **Errors.** One `Error` type with `kind()` (`Check`, `Link`, `Runtime`, `Value`), `diagnostics()`,
-  `locations()`, and `Display`.
+- **Errors.** One `Error` type with `kind()` (`Check`, `Link`, `Runtime`, `Value`, `Registry`, `Internal`),
+  `diagnostics()`, `locations()`, and `Display`. `Internal` means a caught panic (a bug in Lamlet or in a
+  host native). The instance it happened in is unusable, so create a new one. The default panic hook still prints
+  the panic to stderr.
+- **Hostile input.** No document can crash the host: types are limited to 100 levels and 100,000 parts, and
+  budgets bound evaluation and macro expansion. The slowest input found while fuzzing takes about 1.2 seconds
+  (release build) to reach the macro size budget. Hosts that accept untrusted documents should also cap their
+  byte size.
 - **Conversions.** `IntoLamlet`/`FromLamlet` for `()`, `bool`, `i64`, `f64` (finite only), `String`, `Vec<T>`,
   `Option<T>` (std's `<none, some>`), `(A, B)` (std's `{first, second}`), `Value`, and `Data`. Records:
   `record().field("x", 1i64).build()?`.

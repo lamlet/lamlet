@@ -26,9 +26,35 @@ pub enum TypeDesc {
     Opaque(Rc<str>),
 }
 
+/// The deepest type a binding, region, or `Type` value may have. Types are trees that the checker, the VM, and
+/// hosts walk recursively, so their depth bounds host stack use (spec §7.1).
+pub const MAX_TYPE_DEPTH: usize = 100;
+/// The most nodes an inferred type may have; let-polymorphism can otherwise double a type's size per binding.
+pub const MAX_TYPE_SIZE: usize = 100_000;
+
 impl TypeDesc {
     pub fn never() -> TypeDesc {
         TypeDesc::Variant(vec![])
+    }
+
+    /// Whether the descriptor is deeper than `max` (iterative, so it is safe on any input).
+    pub fn deeper_than(&self, max: usize) -> bool {
+        let mut work = vec![(self, 1usize)];
+        while let Some((t, d)) = work.pop() {
+            if d > max {
+                return true;
+            }
+            match t {
+                TypeDesc::List(e) => work.push((e, d + 1)),
+                TypeDesc::Func(ps, r) => {
+                    work.extend(ps.iter().map(|p| (p, d + 1)));
+                    work.push((r, d + 1));
+                }
+                TypeDesc::Record(fs) | TypeDesc::Variant(fs) => work.extend(fs.iter().map(|(_, t)| (t, d + 1))),
+                _ => {}
+            }
+        }
+        false
     }
 
     /// Whether values of this type support generic equality.
@@ -279,6 +305,46 @@ impl TypeCtx {
     }
 
     /// Follow variable bindings at the top of a type.
+    /// Fail when `t` (with its variables' field and alternative constraints) is deeper than `MAX_TYPE_DEPTH` or
+    /// larger than `MAX_TYPE_SIZE`. Iterative, and it stops at the first excess, so its cost is bounded.
+    pub fn check_bounds(&self, t: &Ty) -> Result<(), String> {
+        let mut work: Vec<(&Ty, usize)> = vec![(t, 1)];
+        let mut seen = HashSet::new();
+        let mut nodes = 0usize;
+        while let Some((t, d)) = work.pop() {
+            nodes += 1;
+            if d > MAX_TYPE_DEPTH {
+                return Err(format!("type nesting limit ({} levels) exceeded", MAX_TYPE_DEPTH));
+            }
+            if nodes > MAX_TYPE_SIZE {
+                return Err(format!("type size limit ({} parts) exceeded", MAX_TYPE_SIZE));
+            }
+            let mut t = t;
+            while let Ty::Var(v) = t {
+                match &self.vars[*v as usize].bound {
+                    Some(b) => t = b,
+                    None => break,
+                }
+            }
+            match t {
+                Ty::Var(v) => {
+                    if seen.insert(*v) {
+                        let c = &self.vars[*v as usize].cons;
+                        work.extend(c.fields.iter().chain(&c.alts).map(|f| (&f.1, d + 1)));
+                    }
+                }
+                Ty::List(e) => work.push((e, d + 1)),
+                Ty::Fn(f) => {
+                    work.extend(f.params.iter().map(|p| (p, d + 1)));
+                    work.push((&f.ret, d + 1));
+                }
+                Ty::Record(fs) | Ty::Variant(fs) => work.extend(fs.iter().map(|(_, t)| (t, d + 1))),
+                Ty::Prim(_) | Ty::Opaque(_) => {}
+            }
+        }
+        Ok(())
+    }
+
     pub fn resolve(&self, ty: &Ty) -> Ty {
         let mut t = ty.clone();
         while let Ty::Var(v) = t {
@@ -410,8 +476,13 @@ impl TypeCtx {
             (Ty::Var(x), Ty::Var(y)) if x == y => Ok(()),
             (Ty::Var(x), Ty::Var(y)) => {
                 let (x, y) = (*x, *y);
-                let cx = std::mem::take(&mut self.vars[x as usize].cons);
                 let level = self.vars[x as usize].level.min(self.vars[y as usize].level);
+                // `y`'s constraints must not mention `x`: binding would make `y` contain itself. (Constraints
+                // of `x` that mention `y` are caught when `add_cons` merges them into `y`.)
+                if self.occurs_adjust(x, &b, level, &mut HashSet::new()) {
+                    return Err(format!("recursive type: a type variable occurs in `{}`", self.show(&b)));
+                }
+                let cx = std::mem::take(&mut self.vars[x as usize].cons);
                 self.vars[x as usize].bound = Some(Ty::Var(y));
                 self.vars[y as usize].level = level;
                 self.add_cons(y, cx)
@@ -520,6 +591,14 @@ impl TypeCtx {
     pub fn add_cons(&mut self, v: u32, c: Cons) -> TResult<()> {
         if c.is_empty() {
             return Ok(());
+        }
+        // A field or alternative type is part of the constrained type, so it must not contain the variable
+        // itself (`has #node: a` on `a` would be a recursive type). This is the occurs check of `bind`.
+        let level = self.vars[v as usize].level;
+        for (_, t) in c.fields.iter().chain(&c.alts) {
+            if self.occurs_adjust(v, t, level, &mut HashSet::new()) {
+                return Err(format!("recursive type: a type variable occurs in `{}`", self.show(t)));
+            }
         }
         let mut pending = Vec::new();
         {

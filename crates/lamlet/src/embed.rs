@@ -37,7 +37,7 @@ pub use crate::host::{opaque, NativeCtx, NativeEntry, NativeRegistry, TIME_INPUT
 pub use crate::package::{Exports, MemoryResolver, PackageSource, Resolver};
 pub use crate::source::{DiagKind, Diagnostic, Location};
 pub use crate::syntax::Availability;
-pub use crate::types::TypeDesc;
+pub use crate::types::{TypeDesc, MAX_TYPE_DEPTH};
 pub use crate::value::{display, List, Value};
 pub use crate::vm::{Limits, Stats};
 pub use crate::Options;
@@ -85,6 +85,9 @@ pub enum ErrorKind {
     Value,
     /// A native function or type could not be registered (a repeated id, an unregistered opaque type).
     Registry,
+    /// A bug: Lamlet (or a host native) panicked. The panic was caught; an instance it happened in is unusable,
+    /// and later calls on it fail with this kind too.
+    Internal,
 }
 
 /// The one error type of the embedding surface. It carries the diagnostics and the sources they point into,
@@ -104,6 +107,11 @@ impl Error {
     fn value(message: impl Into<String>) -> Error {
         let d = Diagnostic::new(DiagKind::Type, message, None);
         Error::new(ErrorKind::Value, vec![d], Rc::new(SourceMap::default()))
+    }
+
+    fn internal(message: impl Into<String>) -> Error {
+        let d = Diagnostic::new(DiagKind::Static, message, None);
+        Error::new(ErrorKind::Internal, vec![d], Rc::new(SourceMap::default()))
     }
 
     fn registry(message: impl Into<String>) -> Error {
@@ -151,6 +159,17 @@ impl std::error::Error for Error {}
 impl From<crate::Failure> for Error {
     fn from(f: crate::Failure) -> Error {
         Error::new(ErrorKind::Check, f.diagnostics, f.sources)
+    }
+}
+
+/// Run `f`, turning a panic into an `Internal` error, so that no input can unwind into the host.
+fn guard<T>(what: &str, f: impl FnOnce() -> Result<T, Error>) -> Result<T, Error> {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
+        Ok(r) => r,
+        Err(p) => {
+            let msg = p.downcast_ref::<String>().cloned().or_else(|| p.downcast_ref::<&str>().map(|s| s.to_string())).unwrap_or_default();
+            Err(Error::internal(format!("internal error during {}: {} (please report this as a Lamlet bug)", what, msg)))
+        }
     }
 }
 
@@ -224,17 +243,21 @@ impl Engine {
     }
 
     fn check_with(&self, file: SourceFile, natives: Rc<NativeRegistry>, options: &Options) -> Result<Document, Error> {
-        let inner = crate::check_source(file.into_source(), self.resolver.clone(), natives, options)?;
-        Ok(Document { inner })
+        guard("checking", || {
+            let inner = crate::check_source(file.into_source(), self.resolver.clone(), natives, options)?;
+            Ok(Document { inner })
+        })
     }
 
     /// A new runtime instance of a checked document, linked against this engine's natives.
     pub fn instance(&self, doc: &Document) -> Result<Instance, Error> {
         let sources = doc.inner.sources.clone();
-        let mut inner = crate::Instance::new(doc.inner.program.clone(), self.natives.clone())
-            .map_err(|d| Error::new(ErrorKind::Link, vec![d], sources.clone()))?;
-        inner.set_limits(self.limits.clone());
-        Ok(Instance { inner, sources })
+        guard("linking", || {
+            let mut inner = crate::Instance::new(doc.inner.program.clone(), self.natives.clone())
+                .map_err(|d| Error::new(ErrorKind::Link, vec![d], sources.clone()))?;
+            inner.set_limits(self.limits.clone());
+            Ok(Instance { inner, sources: sources.clone(), poisoned: false })
+        })
     }
 }
 
@@ -475,6 +498,8 @@ impl LineWriter {
 pub struct Instance {
     inner: crate::Instance,
     sources: Rc<SourceMap>,
+    /// Set when a panic was caught during a call: the VM's stacks may be inconsistent.
+    poisoned: bool,
 }
 
 impl Instance {
@@ -521,7 +546,19 @@ impl Instance {
     /// Evaluate the whole document, returning each expression region's value by region index. Fails
     /// atomically: no partial results.
     pub fn evaluate(&mut self) -> Result<Vec<(u32, Value)>, Error> {
-        self.inner.evaluate_current().map_err(|e| Error::runtime(e, &self.sources))
+        self.run("evaluation", |i| i.inner.evaluate_current().map_err(|e| Error::runtime(e, &i.sources)))
+    }
+
+    /// Run a VM operation under the panic guard, poisoning the instance if it panics.
+    fn run<T>(&mut self, what: &str, f: impl FnOnce(&mut Instance) -> Result<T, Error>) -> Result<T, Error> {
+        if self.poisoned {
+            return Err(Error::internal("this instance is unusable after an internal error; create a new one"));
+        }
+        let r = guard(what, || f(self));
+        if matches!(&r, Err(e) if e.kind == ErrorKind::Internal) {
+            self.poisoned = true;
+        }
+        r
     }
 
     /// Call a function binding with arguments. Argument values are checked against the binding's type when
@@ -547,7 +584,7 @@ impl Instance {
         if !f.is_callable() {
             return Err(Error::value(format!("a {} is not a function", f.type_name())));
         }
-        self.inner.call_current(f, args).map_err(|e| Error::runtime(e, &self.sources))
+        self.run("a call", |i| i.inner.call_current(f, args).map_err(|e| Error::runtime(e, &i.sources)))
     }
 
     /// Call a function binding with Rust arguments (a tuple) and convert its result to a Rust type.
@@ -867,35 +904,48 @@ pub enum TypeData {
 }
 
 impl Data {
-    /// Copy a value. Fails on functions and native (opaque) values, naming where in the value they are.
+    /// Copy a value. Fails on functions and native (opaque) values, naming where in the value they are, and on
+    /// values nested deeper than any type may be (`MAX_TYPE_DEPTH`).
     pub fn from_value(v: &Value) -> Result<Data, String> {
-        data_at(v, &mut String::new())
+        data_at(v, &mut String::new(), 1)
     }
 
-    /// The Lamlet value. Fails on a Float that is not finite and on invalid labels.
+    /// The Lamlet value. Fails on a Float that is not finite, on invalid labels, and on nesting deeper than any
+    /// type may be (`MAX_TYPE_DEPTH`).
     pub fn to_value(&self) -> Result<Value, String> {
+        self.to_value_at(1)
+    }
+
+    fn to_value_at(&self, depth: usize) -> Result<Value, String> {
+        if depth > MAX_TYPE_DEPTH {
+            return Err(format!("Data nesting limit ({} levels) exceeded", MAX_TYPE_DEPTH));
+        }
+        let to_value = |x: &Data| x.to_value_at(depth + 1);
         Ok(match self {
             Data::Unit => Value::Unit,
             Data::Bool(b) => Value::Bool(*b),
             Data::Int(n) => Value::Int(*n),
             Data::Float(f) => float(*f)?,
             Data::String(s) => Value::str(s),
-            Data::List(xs) => Value::List(List::from_vec(xs.iter().map(|x| x.to_value()).collect::<Result<_, _>>()?)),
+            Data::List(xs) => Value::List(List::from_vec(xs.iter().map(to_value).collect::<Result<_, _>>()?)),
             Data::Record(fs) => {
                 check_labels(fs.keys().map(|k| k.as_str()), "record field")?;
-                Value::record(fs.iter().map(|(k, x)| Ok((Rc::from(k.as_str()), x.to_value()?))).collect::<Result<_, String>>()?)
+                Value::record(fs.iter().map(|(k, x)| Ok((Rc::from(k.as_str()), to_value(x)?))).collect::<Result<_, String>>()?)
             }
             Data::Variant(l, x) => {
                 check_labels(std::iter::once(l.as_str()), "variant alternative")?;
-                Value::variant(l, x.to_value()?)
+                Value::variant(l, to_value(x)?)
             }
             Data::Type(t) => Value::Type(Rc::new(t.to_desc()?)),
         })
     }
 }
 
-fn data_at(v: &Value, path: &mut String) -> Result<Data, String> {
+fn data_at(v: &Value, path: &mut String, depth: usize) -> Result<Data, String> {
     let here = |path: &str| if path.is_empty() { String::new() } else { format!(" at {}", path) };
+    if depth > MAX_TYPE_DEPTH {
+        return Err(format!("the value is nested deeper than the type nesting limit ({} levels){}", MAX_TYPE_DEPTH, here(path)));
+    }
     Ok(match v {
         Value::Unit => Data::Unit,
         Value::Bool(b) => Data::Bool(*b),
@@ -907,7 +957,7 @@ fn data_at(v: &Value, path: &mut String) -> Result<Data, String> {
             for (i, x) in l.iter().enumerate() {
                 let len = path.len();
                 path.push_str(&format!("[{}]", i));
-                out.push(data_at(&x, path)?);
+                out.push(data_at(&x, path, depth + 1)?);
                 path.truncate(len);
             }
             Data::List(out)
@@ -917,7 +967,7 @@ fn data_at(v: &Value, path: &mut String) -> Result<Data, String> {
             for (n, x) in fs.iter() {
                 let len = path.len();
                 path.push_str(&format!(".{}", n));
-                out.insert(n.to_string(), data_at(x, path)?);
+                out.insert(n.to_string(), data_at(x, path, depth + 1)?);
                 path.truncate(len);
             }
             Data::Record(out)
@@ -925,7 +975,7 @@ fn data_at(v: &Value, path: &mut String) -> Result<Data, String> {
         Value::Variant(x) => {
             let len = path.len();
             path.push_str(&format!("#{}", x.0));
-            let payload = data_at(&x.1, path)?;
+            let payload = data_at(&x.1, path, depth + 1)?;
             path.truncate(len);
             Data::Variant(x.0.to_string(), Box::new(payload))
         }
@@ -953,11 +1003,20 @@ impl TypeData {
         }
     }
 
-    /// The descriptor, normalized (labels sorted). Fails on invalid or repeated labels.
+    /// The descriptor, normalized (labels sorted). Fails on invalid or repeated labels and on nesting deeper
+    /// than `MAX_TYPE_DEPTH`.
     pub fn to_desc(&self) -> Result<TypeDesc, String> {
+        self.to_desc_at(1)
+    }
+
+    fn to_desc_at(&self, depth: usize) -> Result<TypeDesc, String> {
+        if depth > MAX_TYPE_DEPTH {
+            return Err(format!("type nesting limit ({} levels) exceeded", MAX_TYPE_DEPTH));
+        }
+        let sub = |t: &TypeData| t.to_desc_at(depth + 1);
         let labeled = |fs: &[(String, TypeData)], what: &str| -> Result<Vec<(Rc<str>, TypeDesc)>, String> {
             check_labels(fs.iter().map(|f| f.0.as_str()), what)?;
-            let items = fs.iter().map(|(n, t)| Ok((Rc::from(n.as_str()), t.to_desc()?))).collect::<Result<Vec<_>, String>>()?;
+            let items = fs.iter().map(|(n, t)| Ok((Rc::from(n.as_str()), sub(t)?))).collect::<Result<Vec<_>, String>>()?;
             normalize_labeled(items, what)
         };
         Ok(match self {
@@ -967,8 +1026,8 @@ impl TypeData {
             TypeData::Float => TypeDesc::Float,
             TypeData::String => TypeDesc::String,
             TypeData::Type => TypeDesc::Type,
-            TypeData::List(e) => TypeDesc::List(Rc::new(e.to_desc()?)),
-            TypeData::Func(ps, r) => TypeDesc::Func(ps.iter().map(|p| p.to_desc()).collect::<Result<_, _>>()?, Rc::new(r.to_desc()?)),
+            TypeData::List(e) => TypeDesc::List(Rc::new(sub(e)?)),
+            TypeData::Func(ps, r) => TypeDesc::Func(ps.iter().map(sub).collect::<Result<_, _>>()?, Rc::new(sub(r)?)),
             TypeData::Record(fs) => TypeDesc::Record(labeled(fs, "record field")?),
             TypeData::Variant(fs) => TypeDesc::Variant(labeled(fs, "variant alternative")?),
             TypeData::Opaque(id) => TypeDesc::Opaque(Rc::from(id.as_str())),

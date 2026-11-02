@@ -1,0 +1,5 @@
+Two branches that return a value and that value wrapped in a variant would give the value a type containing
+itself. The occurs check rejects it even when nothing consumes the variant.
+$[Import* std]
+$[# wrap {^ {z} {!if true z {#node z}}}]
+expect-error: type: recursive type

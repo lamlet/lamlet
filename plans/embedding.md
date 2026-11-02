@@ -212,6 +212,33 @@ diagnostic pointing at the calling region.
 
 ## Phase 4: robustness
 
+**Status: partly implemented (2026-11-01).** Done:
+
+- **Panic audit.** 39 of the 81 sites are in `#[cfg(test)]` modules, and 10 are calls to a parser method that is
+  named `expect`. The remaining 32 protect invariants that input cannot break: the static intrinsic table, a
+  module scope that always exists, the compiler's own function stack, guards checked just before (`len() == 1`,
+  `starts_with(is_word_start)`), and VM stack pops. The VM pops rely on the compiler emitting balanced code; the
+  verifier does not check stack depth, so phase 5 must add that before loading stored bytecode. The sites are
+  recorded here instead of commented one by one.
+- **The guard.** Every `lamlet::embed` entry point that runs Lamlet code catches panics and reports
+  `ErrorKind::Internal`. An instance that panicked is marked unusable.
+- **Fuzzing in `cargo test`.** `crates/lamlet/tests/fuzz.rs` mutates the fixtures (3,000 inputs by default;
+  `LAMLET_FUZZ_ITERS` for more). It runs every document through check, interface check, render, evaluation, and
+  calls with ill-typed arguments. No panic was found in about 270,000 inputs (three seeds, release builds). `cargo fuzz` is not needed yet.
+- **Found by hostile-input tests, not by the fuzzer:**
+  - A soundness bug: unifying two type variables skipped the occurs check, so `{^ {z} {!if c z {#node z}}}`
+    had a recursive type. A host could get an arbitrarily deep value from it. Fixed in `TypeCtx::unify` and
+    `add_cons`.
+  - Stack overflows, which `catch_unwind` cannot catch: 17 bindings that each double a type's depth, or a
+    computed `Type` 100,000 levels deep, aborted the host process. Fixed with type limits (100 levels and
+    100,000 parts per expression type, 100 levels per `Type` value; spec §7.1), and `Data` conversions refuse
+    deeper values. `crates/lamlet/tests/limits.rs` holds these cases.
+- **Checking is bounded.** The slowest input found is the exponential-macro fixture, which reaches the macro
+  size budget after about 1.2 seconds in a release build. That budget could be tightened.
+
+Not done: several diagnostics per check, and stable error codes (below). The checker stops at the first
+error; reporting independent errors needs recovery in the checker, a separate change.
+
 - **No panics on any input.** Audit the 81 `unwrap`/`expect`/`panic!` sites (counted above); the ones input can
   reach return diagnostics, and the rest get a comment stating the invariant. The facade wraps each entry point
   in `catch_unwind` as a last guard and reports an internal error.

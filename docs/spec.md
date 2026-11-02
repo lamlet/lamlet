@@ -340,6 +340,8 @@ an ordered list of `{pattern template}` clauses:
 | Bracket/brace nesting in source | 200 | Bounds the host stack used by parsing and dropping trees. |
 | Expression nesting seen by the checker, through expansions | 96 | Bounds checker/compiler recursion; about 2 MiB of host stack in unoptimized builds. |
 | Static evaluation | 10M instructions, 100k frames, 256 MiB allocation | The same VM as runtime, with a separate budget. |
+| Type nesting: every expression's type, and every `Type` value built at runtime | 100 levels | Types are trees walked recursively by the checker, the VM, and hosts. Without it, a few let-polymorphic bindings that each double a type's depth overflow the host stack. |
+| Type size: every expression's type | 100,000 parts | Let-polymorphism can double a type's size per binding while adding one level. |
 
 Exceeding any of them is a `limit` diagnostic. The defaults for runtime evaluation are in `vm::Limits`.
 
