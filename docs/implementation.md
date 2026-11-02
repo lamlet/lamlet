@@ -18,7 +18,6 @@ The library has no dependencies. The CLI and the presentation adapter use `serde
 | `builtins.rs` | The `K` table (each entry has a name, scheme, arity, and implementation), label functions, deterministic math, hash |
 | `host.rs`, `package.rs` | Native registry, host context, resolver, the embedded std |
 | `std/std.lam` | The standard library, written in Lamlet |
-| `crates/lamlet-present` | The `present` package (Lamlet) and the render-lab adapter (Rust) |
 
 ## Pipeline
 
@@ -52,7 +51,6 @@ makes them statically available (spec §5).
 | Pattern macros with hygiene and budgets | Implemented and tested |
 | Deterministic math, hash | Implemented and tested (bits pinned) |
 | CLI (`check`/`prepare`/`eval`/`call`/`batch`) | Implemented and tested |
-| render-lab adapter | Implemented; tested offline, and validated and rendered once by render-lab itself (manual run) |
 | Procedural macros, portable artifacts, benchmark suite, multiple diagnostics, mutual recursion, abstract types | Not implemented |
 
 ## Tests
@@ -63,7 +61,6 @@ makes them statically available (spec §5).
 | `crates/lamlet/tests/semantics.rs` (56) | One rule of the spec per test, including evaluation order (observed through a logging native), primitive aliasing and wrapping, staging, budgets, natives, packages, macros, positions |
 | `tests/fixtures/*.lam` (94) | Documents whose prose states `expect:` / `expect-error:` lines; run by `crates/lamlet/tests/fixtures.rs` |
 | `crates/lamlet-cli/tests/cli.rs` (8) | Protocol, exit codes, typed JSON calls |
-| `crates/lamlet-present/tests/present.rs` (7) | The presentation boundary end to end |
 
 All of them pass under both `cargo test` (debug) and `cargo test --release`. Debug builds matter here: the static
 limits (spec §7.1) are chosen so that unoptimized builds stay within a 2 MiB test-thread stack.

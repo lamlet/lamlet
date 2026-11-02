@@ -304,4 +304,4 @@ ordinary function with an ordinary type, so you can alias it, wrap it, or pass i
 - [spec.md](spec.md): the precise semantics, the primitive list, and the staging rules
 - `std/std.lam`: the whole standard library, in Lamlet
 - `tests/fixtures/*.lam`: small documents that state their expected results
-- [host.md](host.md): driving a host application (render-lab presentations) from Lamlet
+- [host.md](host.md): the contract between Lamlet and a host application

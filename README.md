@@ -15,15 +15,15 @@ Lamlet can be embedded in a text document: only `$name`, `${...}`, and `$[...]` 
 else is a comment to the language, which a document host can preserve as prose. Typed native stubs let hosts
 expose APIs implemented outside Lamlet without changing this source convention.
 
-This repository contains a working Rust interpreter (`crates/lamlet`), a CLI (`crates/lamlet-cli`), and a
-host adapter that turns Lamlet presentations into render-lab timelines (`crates/lamlet-present`).
+This repository contains a working Rust interpreter (`crates/lamlet`) and a CLI (`crates/lamlet-cli`). The
+render-lab presentation adapter, `lamlet-present`, is a separate project.
 
 ## Documentation
 
 - [Introduction to Programming Languages](docs/programming-languages-course.md): a guided theory course using Lamlet, with exercises and an executable companion.
 - [Quick start](docs/quick-start.md): the language in ten minutes, for readers who know functional programming.
 - [Language specification](docs/spec.md): syntax, core calculus, types, stages, errors, and the `K` boundary.
-- [Host interface and render-lab integration](docs/host.md): pure descriptions, speech timing, the adapter.
+- [Host interface](docs/host.md): pure descriptions, and the contract every host follows.
 - [Design rationale](docs/rationale.md): the decisions behind the language, and the alternatives considered.
 - [Implementation notes](docs/implementation.md): modules, status, tests, limits.
 
@@ -45,8 +45,7 @@ cargo build --release
 ./target/release/lamlet eval examples/hello.lam      # JSON results on stdout
 ./target/release/lamlet prepare examples/hello.lam   # text, prepared values, and residual runtime regions
 ./target/release/lamlet check examples/hello.lam     # types and stages without running runtime code
-cargo test                                           # unit, semantic, fixture, CLI, and adapter tests
-cargo run -p lamlet-present --example render_lab_timeline -- crates/lamlet-present/examples/lighting.lam out
+cargo test                                           # unit, semantic, fixture, and CLI tests
 ```
 
 The language and `std` remain application-independent. Host libraries and consumer integration plans belong to

@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/lamlet", "crates/lamlet-cli", "crates/lamlet-present"]
+members = ["crates/lamlet", "crates/lamlet-cli"]
 resolver = "2"
 
 [workspace.package]

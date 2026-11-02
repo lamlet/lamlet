@@ -5,7 +5,7 @@ This is the normative description of Lamlet, language version 0.1.0, as implemen
 
 - [quick-start.md](quick-start.md): a tutorial
 - [rationale.md](rationale.md): design decisions and the alternatives considered
-- [host.md](host.md): the host boundary, including render-lab
+- [host.md](host.md): the host boundary
 
 ## 1. Layers
 

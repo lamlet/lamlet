@@ -60,7 +60,8 @@ can be closures (`Value::Closure`), which capture `Rc` values and cannot be conv
 2. Publish `lamlet` (the library) so consumers can depend on a version and vendor it: crates.io, or a tagged git
    URL until then. The library keeps zero dependencies; `serde` support is an optional feature.
 3. Host adapters that serve one consumer do not belong in this repository (only synthetic hosts and examples do).
-   A consumer-specific presentation adapter (`crates/lamlet-present`) moves to its consumer.
+   A consumer-specific presentation adapter (`crates/lamlet-present`) moves to its consumer. (Done: it is now
+   the separate project `lamlet-present`.)
 4. A semver policy: the embedding surface below is the public API; `check`, `compile`, `vm`, `bytecode`, and the
    internal AST stay `#[doc(hidden)]` or private and may change in minor versions. `LANGUAGE_VERSION` and
    `BYTECODE_VERSION` are versioned separately from the crate: a language change that rejects previously
@@ -224,8 +225,8 @@ Each feature goes through the usual path: a rationale entry if it touches a deci
 - `docs/embedding.md`: the facade, threads, natives, artifacts, error handling, with a synthetic host for each
   workload above (a text preparer, a build-time checker, an animation curve evaluator, a two-thread host). The
   hosts live in `crates/lamlet/examples/` and run in CI, so the documentation cannot drift.
-- `docs/host.md` keeps the general host contract (section 5) and points to `docs/embedding.md`; its render-lab
-  sections move with `lamlet-present`.
+- `docs/host.md` keeps the general host contract and points to `docs/embedding.md`. (Its render-lab sections
+  moved with `lamlet-present`.)
 - The CLI is rewritten on the facade, so it is the reference host.
 
 ## Order and size

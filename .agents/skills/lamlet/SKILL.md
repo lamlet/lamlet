@@ -3,8 +3,8 @@ name: lamlet
 description: >-
   Write, read, debug, and extend Lamlet, the typed functional language embedded in text documents (.lam files;
   this repository's crates/lamlet). Use this skill whenever you work with .lam files, `$[...]`/`${...}` document
-  regions, the Lamlet standard library (std/std.lam), the K primitives, Lamlet macros, the lamlet CLI, embedding
-  Lamlet from Rust, or render-lab presentations written in Lamlet (crates/lamlet-present).
+  regions, the Lamlet standard library (std/std.lam), the K primitives, Lamlet macros, the lamlet CLI, or embedding
+  Lamlet from Rust.
 ---
 
 # Lamlet expert guide (language version 0.1)
@@ -320,11 +320,11 @@ Display formats used in `expect:` lines:
 |---|---|
 | `docs/spec.md` | Normative semantics, the full K table, limits |
 | `docs/quick-start.md` | Tutorial |
-| `docs/host.md` | The host boundary and render-lab |
+| `docs/host.md` | The host boundary |
 | `docs/rationale.md` | Why things are the way they are |
 | `std/std.lam` | The standard library source; also the best style reference |
 | `references/std.md` | Every std export with its type (generated) |
 | `references/examples.lam` | Verified idioms |
 | `references/errors.md` | Diagnostics, and their fixes |
-| `references/host-api.md` | The Rust API, CLI, and render-lab adapter |
+| `references/host-api.md` | The Rust API and CLI |
 | `crates/lamlet/src/` | Interpreter internals (see `docs/implementation.md`) |

@@ -6,6 +6,11 @@ bytecode version (`BYTECODE_VERSION`) are tracked separately from the crate vers
 
 ## Unreleased
 
+### Removed
+
+- `lamlet-present`, the render-lab adapter, moved to its own project. The Lamlet repository keeps general
+  host contracts and synthetic hosts only; `docs/host.md` now holds just the general contract.
+
 ### Added
 
 - Continuous integration: tests, clippy, rustdoc, and a check that the `lamlet` library has no dependencies.

@@ -1,4 +1,4 @@
-# Embedding Lamlet (Rust host API), CLI, and the render-lab adapter
+# Embedding Lamlet (Rust host API) and the CLI
 
 ## CLI (`crates/lamlet-cli`, binary `lamlet`)
 
@@ -74,27 +74,3 @@ let v = inst.call(&f, vec![Value::Int(21)], ctx, Limits::default())?;           
   are declared with `[NativeType T "type-id"]` plus `NativeRegistry::register_type`.
 - **Interface-only checking.** `natives.interface_only()` keeps the metadata without implementations.
   `Options { require_linked: true, .. }` fails checking on unregistered natives.
-
-## render-lab adapter (`crates/lamlet-present`)
-
-- **What a presentation defines.** A static `script` (the sentences) and a static
-  `show : Fn([List({seconds: Float, words: List(Float)})], {title, beats})`.
-- **Vocabulary.** It comes from `[Import* present]`, the Lamlet source at `crates/lamlet-present/src/present.lam`:
-  - speech: `say` (`@cue` words mark cues), `timeline`, `at`, `end`, `caption`
-  - actions: `set`, `demo`, `formula`, `hideFormula`, `animate`
-  - curves: `tween`, `wave`, `smooth`, `easeInOut`
-  - structure: `beat`, `p`
-- **The Rust side:**
-  - `Presentation::compile(name, src)` checks the document.
-  - `.build(&mut dyn Synthesizer)` returns the script, the narration timings, and the show.
-  - `.to_timeline(&show, &TimelineOptions)` writes render-lab `Timeline` JSON. Curves are sampled per frame
-    through `Instance::call`.
-  - `narration_manifest(...)` describes the speech for a TTS host.
-- **Synthesizers.** `EstimatedVoice` is a deterministic stand-in with no audio, and `Cached<S>` synthesizes each
-  distinct text once.
-- **Example.** Run
-  `cargo run -p lamlet-present --example render_lab_timeline -- crates/lamlet-present/examples/lighting.lam OUT`.
-  Then in render-lab run
-  `render-lab --investigation o3de/lighting render --timeline OUT/timeline.json --snapshot 0,120`.
-- **Constraints.** Channel names must exist in the render-lab investigation (`render-lab --investigation X
-  values`). Beat kinds are `"3d"` or `"2d"`.
