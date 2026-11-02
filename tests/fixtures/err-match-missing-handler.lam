@@ -1,0 +1,4 @@
+$[Import* std]
+$[# S [% {Variant {' {Field "a" Int} {Field "b" Int}}}]]
+${match {: {#a 1} S} {. a {^ {x} x}}}
+expect-error: type: argument 2: type mismatch

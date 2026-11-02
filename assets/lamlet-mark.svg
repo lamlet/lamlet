@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-labelledby="lamlet-mark-title lamlet-mark-desc">
+  <title id="lamlet-mark-title">Lamlet symbol</title>
+  <desc id="lamlet-mark-desc">A terracotta lambda nested between ink-colored curly braces.</desc>
+  <g id="lamlet-symbol">
+    <g id="braces" fill="none" stroke="#263642" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M73 40C50 40 46 52 46 73V95C46 114 38 123 24 128C38 133 46 142 46 161V183C46 204 50 216 73 216"/>
+      <path d="M183 40C206 40 210 52 210 73V95C210 114 218 123 232 128C218 133 210 142 210 161V183C210 204 206 216 183 216"/>
+    </g>
+    <path id="lambda" fill="#B85336" d="M87 66C100 59 111 63 118 78L164 176C167 183 171 185 179 182L183 195C166 202 155 197 148 182L128 140L99 196H81L119 122L103 88C99 79 95 78 87 82Z"/>
+  </g>
+</svg>

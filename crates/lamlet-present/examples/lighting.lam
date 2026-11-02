@@ -1,0 +1,54 @@
+A point light, in Lamlet
+========================
+
+This document is a short narrated presentation for render-lab's `o3de/lighting` investigation. The prose is
+ignored by Lamlet; the dollar regions compute what is said, when it is said, and what moves while it is said.
+Running it never plays sound or draws: it produces a description that render-lab plays (see docs/host.md).
+
+$[Import* std]
+$[Import* present]
+
+The light's settings, and O3DE's smooth attenuation window w(d) = (1 - (d²/r²)²)², computed in Lamlet.
+
+$[# radius 7.0]
+$[# intensity 6.0]
+$[# window {^ {d r} [# x {/ {* d d} {* r r}}] [# w {- 1.0 {* x x}}] {!if {< w 0.0} 0.0 {* w w}}}]
+$[# percent [% {round {* 100.0 {window {/ radius 2.0} radius}}}]]
+$[# falloff [latex "w = \big(1 - (d^2 / r^2)^2\big)^2"]]
+
+Halfway to the radius, $percent percent of the light remains. A presentation decision follows from the
+settings: a bright light gets a wide radius and a different closing line.
+
+$[# bright [% {> intensity 5.0}]]
+$[# verdictLine [% {!if bright "At this intensity the @glow walls glow warmly." "At this intensity the @glow room stays dim."}]]
+
+The script: everything that is spoken. A word written `@name` is not spoken; it marks a cue that visuals follow.
+
+$[# script [% {' {say "intro" "This room is lit by @light one point light."}
+               {say "falloff" [f "Its light fades @window smoothly: halfway to the radius, $percent percent remains."]}
+               {say "verdict" verdictLine}}]]
+
+The show is a pure function of the measured narration (each sentence's duration and word start times).
+
+$[# show {^ {narration}
+    [# t {timeline script narration 0.4}]
+    [# intro {nth t 0}]
+    [# fall {nth t 1}]
+    [# verdict {nth t 2}]
+    {. title "A point light, in Lamlet"
+       beats {' {beat "lamlet-light" "One light" "3d" {' intro}
+                   {' {demo 0.0 "room"}
+                      {set 0.0 0.0 {' {p "cameraDrift" 1.0} {p "lightIntensity" 0.0} {p "attenuationRadius" radius}}}
+                      {animate {at intro "light"} 1.5 "lightIntensity" {tween 0.0 intensity 1.5 smooth}}}
+                   0.3}
+               {beat "lamlet-falloff" "A smooth falloff" "3d" {' fall}
+                   {' {formula {at fall "window"} falloff}
+                      {animate {.start fall} {.seconds fall} "camera.yaw" {wave 20.0 8.0 4.0}}}
+                   0.3}
+               {beat "lamlet-verdict" {!if bright "A bright room" "A dim room"} "3d" {' verdict}
+                   {' {hideFormula {.start verdict}}
+                      {set {at verdict "glow"} 0.6 {' {p "attenuationRadius" {!if bright 9.0 4.0}}}}}
+                   0.6}}}
+}]
+
+The title card, computed: $[f "${length script} sentences, the window at half radius is $percent%."]

@@ -1,0 +1,3 @@
+$[Import* std]
+${* 1e300 1e300}
+expect-error: runtime: not finite

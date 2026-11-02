@@ -1,0 +1,18 @@
+Prose with $$ dollars, $5, $ alone, {braces}, [# x 1], and unbalanced }} ]] is inert.
+$[Import* std]
+$[# größe 3]
+Size: $größe.
+expect: 3
+Total: $$${+ größe 1}
+expect: 4
+Trailing hyphen: $größe- is fine.
+expect: 3
+${+
+  1
+  2}
+expect: 3
+```
+${* 2 3}
+```
+expect: 6
+The document may end with a lone dollar $

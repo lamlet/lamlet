@@ -1,0 +1,3 @@
+$[Import* std]
+$[# m -9223372036854775808] ${abs m}
+expect-error: runtime: overflow

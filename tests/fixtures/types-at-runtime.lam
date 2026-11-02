@@ -1,0 +1,5 @@
+Type values are ordinary data: they can be computed at runtime (but only static ones can be used to check).
+$[Import* std]
+${List Int} ${= {List Int} {List Int}}
+expect: List(Int)
+expect: true

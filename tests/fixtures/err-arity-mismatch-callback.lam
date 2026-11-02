@@ -1,0 +1,3 @@
+$[Import* std]
+${{^ {f} {f 1 2}} {^ {x} x}}
+expect-error: type: arity mismatch

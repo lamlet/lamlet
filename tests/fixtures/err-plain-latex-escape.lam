@@ -1,0 +1,3 @@
+$[Import* std]
+${concat "\frac"}
+expect-error: syntax: unknown escape `\f`

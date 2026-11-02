@@ -1,0 +1,3 @@
+$[Import* std]
+${round 1e300}
+expect-error: runtime: outside the Int range

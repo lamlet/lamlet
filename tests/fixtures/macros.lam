@@ -1,0 +1,38 @@
+User macros: binding forms, recursion, ellipsis, literals, local shadowing.
+$[Import* std]
+$[Macro !let1 {{{name value} body} {{^ {name} body} value}}]
+${!let1 {x 4} {* x x}}
+expect: 16
+$[Macro !lets
+    {{{} body} body}
+    {{{{name value} rest ...} body} {!let1 {name value} {!lets {rest ...} body}}}]
+${!lets {{a 1} {b {+ a 1}}} {* a b}}
+expect: 2
+$[Macro !when {{c body} {!if c {some body} none}}]
+${!when true 5} ${!when false 5}
+expect: #some(5)
+expect: #none
+$[Macro !twice {{e} {' e e}}]
+$[Macro !thunk {{e} {^ {} e}}]
+$[Macro !static {{e} [% e]}]
+${!twice {+ 1 1}} ${{!thunk 7}} ${!static {+ 1 2}}
+expect: [2, 2]
+expect: 7
+expect: 3
+Dropped operands are never checked or evaluated:
+$[Macro !count {{} 0} {{_ rest ...} {+ 1 {!count rest ...}}}]
+${!count a b {undefined stuff}}
+expect: 3
+$[Macro !kw {{"plus" a b} {+ a b}} {{"times" a b} {* a b}}]
+${!kw "times" 3 4}
+expect: 12
+${{^ {} [Macro !if {{c a b} b}] {!if true 1 2}}} ${!if true 1 2}
+expect: 2
+expect: 1
+${!and} ${!or false false} ${!and true {!or false true}}
+expect: true
+expect: false
+expect: true
+$[# if 7]
+${!if true if 0}
+expect: 7

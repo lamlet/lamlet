@@ -1,0 +1,3 @@
+$[Import* std]
+${.x= {. x 1} "one"}
+expect-error: type: mismatch

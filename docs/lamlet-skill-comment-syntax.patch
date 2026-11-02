@@ -1,0 +1,23 @@
+--- a/.agents/skills/lamlet/SKILL.md
++++ b/.agents/skills/lamlet/SKILL.md
+@@ -46,7 +46,7 @@
+ ## 2. Syntax, complete
+ 
+ ```text
+-; line comment          ~{ disabled form }      ~[ disabled form ]       $~{...} disabled region (in prose)
++;; line comment         ;{ disabled form }      ;[ disabled form ]       $;{...} / $;[...] disabled region (in prose)
+ 
+ 42  -8  1.5  2e3  "text\n\u{41}"  true  false   literals (no implicit Int↔Float)
+ x   pkg::x   K::add   +   std::+                names; `::` separates module paths, never `.`
+@@ -76,7 +76,10 @@
+ - `{.x r}` reads field `x` of `r`.
+ - `{r.x}` calls a function named `x` with `r`.
+ 
+-Every token must be separated by whitespace or a delimiter; the dot of the call sugar is the only exception.
++Every token must be separated by whitespace, a delimiter, or a comment; the dot of the call sugar is the
++only exception. A lone `;` inside code is a syntax error. Balanced comments contain raw text with balanced
++braces/brackets and closed Strings; `;;` has no special meaning inside them. Strings and prose retain literal
++semicolons. `~` is an ordinary symbolic identifier.
+ 
+ ### Bodies
+ 

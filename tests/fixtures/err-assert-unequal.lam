@@ -1,0 +1,3 @@
+$[Import* std]
+${!assert {+ 1 1} 3}
+expect-error: static-evaluation: assertion failed: 2 is not equal to 3

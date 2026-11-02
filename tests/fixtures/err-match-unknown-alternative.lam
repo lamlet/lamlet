@@ -1,0 +1,4 @@
+$[Import* std]
+$[# S [% {Variant {' {Field "a" Int}}}]]
+${: {#b 1} S}
+expect-error: type: no alternative `#b`

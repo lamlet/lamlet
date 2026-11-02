@@ -1,0 +1,3 @@
+$[Import* std]
+${+ 1 ;[bad} 2}
+expect-error: syntax: mismatched delimiter inside a block comment

@@ -1,0 +1,3 @@
+$[Import* std]
+${+ 9223372036854775808 0}
+expect-error: syntax: outside the signed 64-bit range

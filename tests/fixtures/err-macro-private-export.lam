@@ -1,0 +1,3 @@
+$[Import* std]
+$[Import fx-ctl] ${!fx-ctl::_hidden}
+expect-error: name: unknown macro

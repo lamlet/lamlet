@@ -1,0 +1,3 @@
+$[Import* std]
+${format "{} {}" {' "1"}}
+expect-error: runtime: format: too few arguments

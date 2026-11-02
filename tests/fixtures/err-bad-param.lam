@@ -1,0 +1,3 @@
+$[Import* std]
+${^ {x 1} x}
+expect-error: syntax: lambda parameter

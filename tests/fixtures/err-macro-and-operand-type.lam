@@ -1,0 +1,3 @@
+$[Import* std]
+${!and true 1}
+expect-error: type: Bool

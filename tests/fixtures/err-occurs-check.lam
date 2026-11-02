@@ -1,0 +1,3 @@
+$[Import* std]
+${{^ {f} {f f}} 1}
+expect-error: type: recursive type

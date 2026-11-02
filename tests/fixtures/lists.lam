@@ -1,0 +1,36 @@
+Lists: empty-list typing, nesting, folds, and set-like operations.
+$[Import* std]
+${: {flatten {'}} [% {List Int}]}
+expect: []
+${tail {' 1}} ${contains {'} 1} ${length {'}}
+expect: []
+expect: false
+expect: 0
+${unique {' "b" "a" "b"}}
+expect: ["b", "a"]
+${filter {' 1 2 3} {^ {x} false}}
+expect: []
+${= {' {' 1} {'}} {' {' 1} {'}}} ${= {' 1 2} {' 1 2 3}}
+expect: true
+expect: false
+${map {' {' 1 2} {' 3}} length}
+expect: [2, 1]
+${fold {' "a" "b" "c"} "" ++} ${foldr {' "a" "b" "c"} "" ++}
+expect: "abc"
+expect: "abc"
+${append {'} {' 1}} ${head {' {' 9}}}
+expect: [1]
+expect: [9]
+${union {' 1 2} {union {' 2 3} {' 3 4}}}
+expect: [1, 2, 3, 4]
+${map {' 1 2 3} {^ {x} {' x {* x x}}}}
+expect: [[1, 1], [2, 4], [3, 9]]
+${reverse {' {pair 1 "a"} {pair 2 "b"}}}
+expect: [{first: 2, second: "b"}, {first: 1, second: "a"}]
+${range 2 5} ${take {' 1 2 3} 2} ${drop {' 1 2 3} 2} ${nth {' 7 8 9} 1} ${any {' 1 2} {^ {x} {> x 1}}} ${all {'} {^ {x} false}}
+expect: [2, 3, 4]
+expect: [1, 2]
+expect: [3]
+expect: 8
+expect: true
+expect: true

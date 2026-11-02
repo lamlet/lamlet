@@ -1,0 +1,33 @@
+[f "..."] templates: $$name and $${expr} holes, $$$$ for a dollar, ordinary escapes, and indentation stripping.
+$[Import* std]
+$[# name "Ann"]
+$[# n 3]
+$[f "Hi $name, you have $n items."]
+expect: "Hi Ann, you have 3 items."
+$[f "Total: ${* n 2}; price $$5; a lone $ sign; 100%; {braces} stay; static $[% n]."]
+expect: "Total: 6; price $5; a lone $ sign; 100%; {braces} stay; static 3."
+$[f "tab\there \"quoted\" $true $K::unit end"]
+expect: "tab\there \"quoted\" true  end"
+$[f "Bye $name."]
+expect: "Bye Ann."
+$[f "
+    Dear $name,
+      thanks for ${+ n 1} things!
+    "]
+expect: "Dear Ann,\n  thanks for 4 things!\n"
+$[f "no strip
+  here"]
+expect: "no strip\n  here"
+$[f "
+    no trailing newline"]
+expect: "no trailing newline"
+${map {' 1 2} {^ {i} [f "#$i"]}}
+expect: ["#1", "#2"]
+$[# greeting [f "Hi $name"]]
+$[% greeting]
+expect: "Hi Ann"
+$[f ""]
+expect: ""
+$[# größe 2.5]
+$[f "$größe°"]
+expect: "2.5°"

@@ -1,0 +1,3 @@
+$[Import* std]
+$[f "\frac{1}{2}"]
+expect-error: syntax: for LaTeX, use [latex

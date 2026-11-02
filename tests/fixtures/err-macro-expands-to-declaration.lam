@@ -1,0 +1,3 @@
+$[Import* std]
+$[Macro !d {{} [# x 1]}] ${!d}
+expect-error: syntax: declaration has no value

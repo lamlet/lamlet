@@ -1,0 +1,5 @@
+An expansion that doubles its syntax each step must hit a budget, not exhaust memory.
+$[Import* std]
+$[Macro !grow {{x} {!grow {x x}}}]
+${!grow 1}
+expect-error: limit: size budget exceeded

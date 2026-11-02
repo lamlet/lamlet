@@ -1,0 +1,4 @@
+A double-semicolon comment runs to the end of the line, so it also comments out a closer on that line.
+$[Import* std]
+${+ 1 2 ;; comment}
+expect-error: syntax: unterminated

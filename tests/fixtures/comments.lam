@@ -1,0 +1,23 @@
+Comments: semicolon-prefixed braces and brackets remove a balanced form inside code; dollar-semicolon disables a whole region.
+$[Import* std]
+${+ 1 ;{2} 3}
+expect: 4
+${+ 1 ;[don't count $ this, or "]" or {}] 2}
+expect: 3
+${{^ {x}
+    ;{[# unused {error "never checked"}]}
+    ;[Twice the input.]
+    [# d {* 2 x}]
+    d} 21}
+expect: 42
+${' ;{1} ;[2]}
+expect: []
+$;{+ 1 $missing} and $;[# disabled {error "x"}] produce nothing, even with active-looking text inside.
+$[# ~ {^ {x} {* x 10}}]
+${~ 3}
+expect: 30
+${~{+ 1 2}}
+expect: 30
+A lone tilde before a space is ordinary: ~ {not a comment because prose is inert anyway}.
+${++ ";{" "}"}
+expect: ";{}"

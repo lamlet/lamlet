@@ -1,0 +1,4 @@
+Nesting below the limit is fine.
+$[Import* std]
+${id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id 1}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}
+expect: 1

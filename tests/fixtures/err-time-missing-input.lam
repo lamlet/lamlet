@@ -1,0 +1,3 @@
+$[Import* std]
+${time}
+expect-error: native: std.time

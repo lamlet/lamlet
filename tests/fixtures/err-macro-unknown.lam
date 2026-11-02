@@ -1,0 +1,3 @@
+$[Import* std]
+${!nope 1}
+expect-error: name: unknown macro `!nope`

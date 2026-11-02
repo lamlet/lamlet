@@ -1,0 +1,3 @@
+$[Import* std]
+${!if true 1 "one"}
+expect-error: type: same type

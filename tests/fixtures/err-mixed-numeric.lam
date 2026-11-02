@@ -1,0 +1,3 @@
+$[Import* std]
+${max 1 2.0}
+expect-error: type: mismatch

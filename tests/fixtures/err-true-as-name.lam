@@ -1,0 +1,3 @@
+$[Import* std]
+$[# true 1]
+expect-error: syntax: binding name

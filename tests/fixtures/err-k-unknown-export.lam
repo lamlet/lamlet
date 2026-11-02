@@ -1,0 +1,3 @@
+$[Import* std]
+$K::nothing
+expect-error: name: no public export `nothing`

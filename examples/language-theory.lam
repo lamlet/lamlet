@@ -1,0 +1,92 @@
+Introduction to Programming Languages: executable companion.
+Read docs/programming-languages-course.md alongside this document.
+Run from the repository root:
+cargo run -q -p lamlet --example run -- examples/language-theory.lam
+
+$[Import* std]
+
+1. Expressions, types, and evaluation.
+An expression is a piece of code that produces a value.
+expect: 3
+${+ 1 2}
+
+2. Surface syntax can describe the same operation in different ways.
+These calls both apply neg to 3.
+expect: -3
+${neg 3}
+expect: -3
+${3.neg}
+
+3. Functions remember the bindings visible where they were defined.
+The base parameter of the caller does not replace addBase's captured base.
+expect: 15
+$[# base 10]
+$[# addBase {^ {x} {+ base x}}]
+${{^ {base} {addBase 5}} 100}
+
+4. A lambda delays its body. The conditional macro uses this property.
+expect: 7
+${!if true 7 {error "the unselected branch must not execute"}}
+expect: 7
+${caseBool true {^ {} 7} {^ {} {error "also unselected"}}}
+
+5. Checking a type does not change the value.
+expect: 3
+${: {+ 1 2} Int}
+
+6. A let-bound function can be instantiated at different types.
+expect: 7
+$[# identity {^ {x} x}]
+${identity 7}
+expect: true
+${identity true}
+
+7. Records combine fields; variants select one labeled alternative.
+expect: "Ada"
+$[# person {. name "Ada" age 36}]
+${.name person}
+expect: "value 7"
+$[# describe {^ {option}
+    {match option {.
+        none {^ {ignored} "missing"}
+        some {^ {value} [f "value $value"]}
+    }}
+}]
+${describe {#some 7}}
+expect: "missing"
+${describe {#none unit}}
+
+8. Tail recursion carries the remaining work as parameters.
+For this example n must be nonnegative and the result must fit in Int.
+expect: 55
+$[# sumDown {^ loop {n acc}
+    {!if {= n 0} acc {loop {- n 1} {+ acc n}}}
+}]
+${sumDown 10 0}
+
+9. Immutable update returns a new value.
+The original person's age is still 36.
+expect: 36
+$[# older {.age= person 37}]
+${.age person}
+expect: 37
+${.age older}
+
+10. Macros rewrite syntax; staging evaluates checked code into values.
+expect: "ran"
+$[Macro !unless {{condition yes no} {!if condition no yes}}]
+${!unless false "ran" "skipped"}
+expect: [0, 1, 4, 9, 16]
+$[# squares [% {map {range 0 5} {^ {x} {* x x}}}]]
+$squares
+
+11. A closure can outlive the function call that created it.
+expect: 12
+$[# makeAdder {^ {amount} {^ {x} {+ amount x}}}]
+$[# addFive {makeAdder 5}]
+${addFive 7}
+
+12. Arithmetic laws depend on the language's numeric semantics.
+This association succeeds; (+ maximum 1) would overflow before subtracting 1.
+expect: 9223372036854775807
+${+ 9223372036854775807 {+ 1 -1}}

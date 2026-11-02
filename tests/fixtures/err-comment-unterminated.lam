@@ -1,0 +1,3 @@
+$[Import* std]
+${+ 1 ;{unfinished
+expect-error: syntax: unterminated block comment

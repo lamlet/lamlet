@@ -1,0 +1,11 @@
+Importing structured values from a package.
+$[Import* std]
+$[Import fx-shapes]
+$[ImportAs fx-shapes s]
+${.x fx-shapes::origin} ${= s::origin fx-shapes::origin}
+expect: 0
+expect: true
+${.y {: {. x 1 y 2} s::Point}}
+expect: 2
+${K::add 1 2}
+expect: 3

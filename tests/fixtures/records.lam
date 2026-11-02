@@ -1,0 +1,34 @@
+Structural records: literals, canonical field order, getters/setters as values, nesting.
+$[Import* std]
+$[# a {. y 2 x 1}]
+$[# b {. x 1 y 2}]
+${= a b} $a
+expect: true
+expect: {x: 1, y: 2}
+$[# c {.x= a 5}]
+$a $c
+expect: {x: 1, y: 2}
+expect: {x: 5, y: 2}
+$[# l {. from a tags {' "red"}}]
+${.y {.from l}} ${.tags l}
+expect: 2
+expect: ["red"]
+${. } ${= {hash a} {hash b}}
+expect: {}
+expect: true
+Getters and setters are ordinary functions with row-polymorphic types:
+${map {' a c} .x} ${map {' a c} {^ {r} {.y= r 0}}}
+expect: [1, 5]
+expect: [{x: 1, y: 0}, {x: 5, y: 0}]
+$[# getX .x]
+${getX {. x "s" z true}} ${getX a}
+expect: "s"
+expect: 1
+A computed Struct type checks a literal by ascription:
+$[# P [% {Struct {' {Field "x" Int} {Field "y" Int}}}]]
+${: {. y 1 x 2} P}
+expect: {x: 2, y: 1}
+Fields are evaluated in source order:
+$[# trace [% {. second {length {' 1 2}} first {length {'}}}]]
+$trace
+expect: {first: 0, second: 2}

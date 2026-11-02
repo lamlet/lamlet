@@ -1,0 +1,3 @@
+$[Import* std]
+${map {' 1 0} {^ {x} {div 1 x}}}
+expect-error: runtime: division by zero

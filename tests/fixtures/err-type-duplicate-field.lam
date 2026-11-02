@@ -1,0 +1,3 @@
+$[Import* std]
+$[% {Struct {' {Field "x" Int} {Field "x" Bool}}}]
+expect-error: static-evaluation: duplicate field label "x"

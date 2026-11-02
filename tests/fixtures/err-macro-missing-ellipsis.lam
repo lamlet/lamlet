@@ -1,0 +1,3 @@
+$[Import* std]
+$[Macro !e {{x ...} x}] ${!e 1 2}
+expect-error: syntax: follow it with `...`

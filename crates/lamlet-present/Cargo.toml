@@ -1,0 +1,9 @@
+[package]
+name = "lamlet-present"
+version = "0.1.0"
+edition = "2021"
+description = "Host adapter: Lamlet presentation descriptions to render-lab timelines (no render-lab dependency)."
+
+[dependencies]
+lamlet = { path = "../lamlet" }
+serde_json = "1"

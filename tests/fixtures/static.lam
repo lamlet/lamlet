@@ -1,0 +1,17 @@
+Static availability: literals, [% ...] results, and closures over static values.
+$[Import* std]
+$[# base [% 10]]
+$[# f [% {^ {x} {+ x base}}]]
+${f 1} $[% {f 2}] $[% [% 3]]
+expect: 11
+expect: 12
+expect: 3
+$[# tbl [% {map {' 1 2 3} {^ {x} {* x x}}}]]
+$tbl ${!assert {length tbl} 3}
+expect: [1, 4, 9]
+expect: 3
+$[# lit 5]
+$[# g {^ {} lit}]
+$[% {+ lit 1}] $[% {g}]
+expect: 6
+expect: 5

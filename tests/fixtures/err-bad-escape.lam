@@ -1,0 +1,3 @@
+$[Import* std]
+${concat "\q"}
+expect-error: syntax: unknown escape

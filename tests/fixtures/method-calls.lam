@@ -1,0 +1,35 @@
+Call sugar: `x.f` is `{f x}`, and at the head of a brace `{x.f a b}` is `{f x a b}`. `f` is found by ordinary
+lexical lookup (never by the type of x), so the sugar works for every type and changes no semantics.
+$[Import* std]
+${"Hello!".substr 0 3} ${"Hello!".chars.length} ${"a,b,,c".split ","}
+expect: "Hel"
+expect: 6
+expect: ["a", "b", "", "c"]
+Chains: every step but the last takes only the receiver; braces can be receivers too.
+${{' 1 2 3}.map {^ {x} {* x x}}} ${{{' 1 2 3 4}.filter {^ {x} {> x 2}}}.length} ${3.neg} ${2.5.floor}
+expect: [1, 4, 9]
+expect: 2
+expect: -3
+expect: 2
+Outside the head, `x.f` is a one-argument call: here `xs.reverse` is the receiver-only call `{reverse xs}`.
+$[# xs {' 1 2 3}]
+${append xs xs.reverse} ${xs.std::length}
+expect: [1, 2, 3, 3, 2, 1]
+expect: 3
+Whitespace matters: `{r .x}` applies r to the getter `.x`; `{.x r}` reads the field.
+$[# twice {^ {f} {^ {r} {* 2 {f r}}}}]
+${{twice .x} {. x 21}} ${.x {. x 1}}
+expect: 42
+expect: 1
+Objects are records; methods are fields holding functions. Instances made from a prototype share one closure:
+`.name=` copies only the record's field table (values are shared, never deep-copied).
+$[# _greet {^ {self} [f "Hi, I am ${.name self}."]}]
+$[# Person {. name "nobody" greet _greet}]
+$[# ada {.name= Person "Ada"}]
+${{.greet ada} ada} ${{.greet Person} Person}
+expect: "Hi, I am Ada."
+expect: "Hi, I am nobody."
+Macros see the sugar as ordinary calls, so it works inside templates (and is hygienic there).
+$[Macro !firstThree {{s} {s.substr 0 3}}]
+${!firstThree "Lamlet"}
+expect: "Lam"

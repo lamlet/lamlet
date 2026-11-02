@@ -1,0 +1,4 @@
+Recursive types are not supported: an infinite stream fails the occurs check.
+$[Import* std]
+$[# counter {^ next {n} {^ {} {. value n rest {next {+ n 1}}}}}]
+expect-error: type: recursive type

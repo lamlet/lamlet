@@ -1,0 +1,109 @@
+The `present` host package: pure descriptions of a narrated, animated presentation.
+
+Nothing here plays sound, draws, or schedules anything. A presentation is the value of an ordinary function of
+the measured narration timing (see docs/host.md). The host synthesizes the speech, calls that function once,
+samples the animation curves at the frames it renders, and hands the result to its own player (for render-lab,
+a Timeline). Times are in seconds from the start of the presentation.
+
+$[Import* std]
+
+1. Speech
+
+Private. Splits text on single spaces into its words (empty words are dropped).
+$[# _words {^ {text}
+    [# step {^ {acc c}
+        {!if {= c " "}
+            {. done {!if {= {.cur acc} ""} {.done acc} {cons {.cur acc} {.done acc}}} cur ""}
+            {.cur= acc {++ {.cur acc} c}}}}]
+    [# r {fold {chars text} {. done {'} cur ""} step}]
+    {reverse {!if {= {.cur r} ""} {.done r} {cons {.cur r} {.done r}}}}
+}]
+Private. True for a cue marker word, `@name`.
+$[# _isCue {^ {w} {!and {!= w ""} {= {head {chars w}} "@"}}}]
+Fn([String, String], {id: String, text: String, cues: List({name: String, word: Int})}). A sentence to speak.
+Words written `@name` are not spoken: they mark a cue at the next spoken word, so visuals can follow the voice.
+$[# say {^ {id text}
+    [# step {^ {acc w}
+        {!if {_isCue w}
+            {.cues= acc {append {.cues acc} {' {. name {concat {tail {chars w}}} word {.n acc}}}}}
+            {.n= {.kept= acc {append {.kept acc} {' w}}} {+ {.n acc} 1}}}}]
+    [# r {fold {_words text} {. cues {'} kept {'} n 0} step}]
+    {. id id text {join " " {.kept r}} cues {.cues r}}
+}]
+
+2. Timing from measured narration
+
+Narration is what the host measured when it synthesized a sentence: {seconds: Float, words: List(Float)},
+the duration and each spoken word's start time. Timing is therefore a pure function of measurements, so
+seeking, replay, and offline rendering all see the same schedule.
+
+Fn([List(Speech), List(Narration), Float], List(Timed)). Lays sentences end to end with a pause after each.
+A timed sentence is {speech, start, seconds, words}.
+$[# timeline {^ {script narration pause}
+    [# step {^ {acc pair}
+        [# n {.second pair}]
+        [# t {. speech {.first pair} start {.at acc} seconds {.seconds n} words {.words n}}]
+        {. at {+ {.at acc} {+ {.seconds n} pause}} out {cons t {.out acc}}}}]
+    {reverse {.out {fold {zip script narration} {. at 0.0 out {'}} step}}}
+}]
+Fn([Timed, String], Float). The absolute time of a cue in a timed sentence: the start of its next spoken word.
+$[# at {^ {timed name}
+    [# found {filter {.cues {.speech timed}} {^ {c} {= {.name c} name}}}]
+    [# word {.word {!if {isEmpty found} {error {++ "no cue named " name}} {head found}}}]
+    {+ {.start timed} {!if {< word {length {.words timed}}} {nth {.words timed} word} {.seconds timed}}}
+}]
+Fn([Timed], Float). When a timed sentence ends.
+$[# end {^ {timed} {+ {.start timed} {.seconds timed}}}]
+Fn([Timed], {start: Float, end: Float, text: String}). The sentence's caption, shown while it is spoken.
+$[# caption {^ {timed} {. start {.start timed} end {end timed} text {.text {.speech timed}}}}]
+
+3. Rich text
+
+Private. A formula's source as a rich-text attribute value: only `"` needs escaping (as `\"`).
+$[# _attr {^ {f} {concat {map {chars {latexSource f}} {^ {c} {!if {= c "\""} "\\\"" c}}}}}]
+Fn([Latex], String). An inline formula run for a caption: {@ formula="..."}.
+$[# inlineFormula {^ {f} [# v {_attr f}] [f "{@ formula=\"$v\"}"]}]
+
+4. Actions
+
+An action is a variant the host interprets at its time `at`:
+
+- #set: values to set, blended over `blend` seconds.
+- #demo: switch to a demonstration.
+- #formula: show a formula card (an empty tag hides it).
+- #animate: drive one channel by a curve of local time for `seconds`.
+
+Fn([String, Float], {name: String, value: Float}). One channel value.
+$[# p {^ {name value} {. name name value value}}]
+Fn([Float, Float, List({name: String, value: Float})], Action). Set values, blended over `blend` seconds.
+$[# set {^ {time blend params} {#set {. at time blend blend params params}}}]
+Fn([Float, String], Action). Switch the demonstration.
+$[# demo {^ {time name} {#demo {. at time name name}}}]
+Fn([Float, Latex], Action). Show a formula on the formula card.
+$[# formula {^ {time f} [# v {_attr f}] {#formula {. at time tag [f "{@ formula=\"$v\" display=yes}"]}}}]
+Fn([Float], Action). Hide the formula card.
+$[# hideFormula {^ {time} {#formula {. at time tag ""}}}]
+Fn([Float, Float, String, Fn([Float], Float)], Action). Drive a channel by curve(t) for t from 0 to seconds.
+$[# animate {^ {time seconds channel curve} {#animate {. at time seconds seconds channel channel curve curve}}}]
+
+5. Easing and curves (Animation = Fn([Float], Float), a pure function of local time)
+
+Fn([Float], Float). Ease in and out over [0, 1] (a half cosine).
+$[# easeInOut {^ {t} {- 0.5 {* 0.5 {cos {* pi {clamp t 0.0 1.0}}}}}}]
+Fn([Float], Float). Smootherstep over [0, 1], render-lab's default blend.
+$[# smooth {^ {t} [# x {clamp t 0.0 1.0}] {* x {* x {* x {+ 10.0 {* x {- {* 6.0 x} 15.0}}}}}}}]
+Fn([Float, Float, Float, Fn([Float], Float)], Fn([Float], Float)). A tween from a to b over seconds.
+$[# tween {^ {a b seconds ease} {^ {t} {lerp a b {ease {/ t seconds}}}}}]
+Fn([Float, Float, Float], Fn([Float], Float)). A sine wave around center.
+$[# wave {^ {center amplitude period} {^ {t} {+ center {* amplitude {sin {/ {* 2.0 {* pi t}} period}}}}}}]
+
+6. Beats
+
+Fn([String, String, String, List(Timed), List(Action), Float], Beat). A beat spans its sentences plus a tail.
+$[# beat {^ {id headline kind sentences actions tail}
+    {. id id headline headline kind kind
+       start {.start {head sentences}}
+       seconds {+ {- {end {nth sentences {- {length sentences} 1}}} {.start {head sentences}}} tail}
+       captions {map sentences caption}
+       actions actions}
+}]

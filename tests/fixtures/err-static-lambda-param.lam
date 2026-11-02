@@ -1,0 +1,3 @@
+$[Import* std]
+${{^ {y} [% y]} 1}
+expect-error: stage: runtime binding `y`

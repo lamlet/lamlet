@@ -1,0 +1,8 @@
+[package]
+name = "lamlet"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Lamlet language library: scanner, checker, bytecode VM, static preparation"
+
+[dependencies]

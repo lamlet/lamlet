@@ -1,0 +1,7 @@
+$[Import* std]
+${+
+ 1
+ 2}
+expect: 3
+${++ "a" "b"}
+expect: "ab"

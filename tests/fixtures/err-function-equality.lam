@@ -1,0 +1,3 @@
+$[Import* std]
+${= {^ {x} x} {^ {x} x}}
+expect-error: type: equality

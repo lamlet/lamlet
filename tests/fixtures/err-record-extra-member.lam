@@ -1,0 +1,3 @@
+$[Import* std]
+$[# P [% {Struct {' {Field "x" Int}}}]] ${: {. x 1 y 2} P}
+expect-error: type: ascribed type {x: Int}

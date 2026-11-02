@@ -1,0 +1,15 @@
+A small Lamlet document. Everything outside dollar regions is prose.
+
+$[Import* std]
+$[# square {^ {x} {* x x}}]
+$[# AGE [% 21]]
+
+The square of 6 is ${square 6}. I am $[% AGE] years old, so I am
+${!if {>= AGE 21} "eligible" "not eligible"} to vote in this example.
+
+$[# counter {. count 3 label "items"}]
+There are ${.count counter} ${.label counter}.
+
+$[# nums [% {map {' 1 2 3} {^ {x} {+ x 1}}}]]
+${!assert nums {' 2 3 4}}
+$[f "The total is ${fold nums 0 +}."]

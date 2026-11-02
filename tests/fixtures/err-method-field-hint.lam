@@ -1,0 +1,5 @@
+`x.name` calls a function named `name`; it does not read a field. The diagnostic says how to read one.
+$[Import* std]
+$[# p {. name "Ada"}]
+${p.name}
+expect-error: name: to read a field, write `{.name x}`

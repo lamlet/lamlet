@@ -1,0 +1,3 @@
+$[Import* std]
+${: 1 {List Int}}
+expect-error: stage: statically known

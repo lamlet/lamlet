@@ -1,0 +1,19 @@
+Hygiene: template binders cannot capture, template names resolve at the definition.
+$[Import* std]
+$[Macro !swapArgs {{f a b} {f b a}}]
+${!swapArgs - 1 10}
+expect: 9
+$[Macro !withTmp {{e} {{^ {tmp} {+ tmp e}} 1}}]
+$[# tmp 100]
+${!withTmp tmp}
+expect: 101
+${{^ {+} {!withTmp 2}} 0}
+expect: 3
+$[Macro !nest {{e} {!withTmp {!withTmp e}}}]
+${!nest 0}
+expect: 2
+Holes inside template strings are hygienic too; operands reach them through a template binder.
+$[# tag "lib"]
+$[Macro !label {{v} {{^ {val} [f "$tag: $val"]} v}}]
+${{^ {tag} {!label 1}} "user"}
+expect: "lib: 1"

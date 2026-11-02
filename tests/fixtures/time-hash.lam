@@ -1,0 +1,10 @@
+input: std.time=1700000000
+$[Import* std]
+${time} ${- {time} {time}}
+expect: 1700000000
+expect: 0
+${= {hash {' 1 2}} {hash {' 1 2}}} ${= {hash "a"} {hash "b"}} ${= {hash 2} {hash 2}} ${= {hash {some 1}} {hash none}}
+expect: true
+expect: false
+expect: true
+expect: false

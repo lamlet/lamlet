@@ -1,0 +1,4 @@
+`std.map` is call sugar for `{map std}`; a namespace is not a value, and exports use `::`.
+$[Import* std]
+${std.map}
+expect-error: name: an export is written `std::name`

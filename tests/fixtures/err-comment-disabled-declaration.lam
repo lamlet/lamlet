@@ -1,0 +1,4 @@
+$[Import* std]
+$;[# x 1]
+$x
+expect-error: name: unknown name `x`

@@ -1,0 +1,3 @@
+$[Import* std]
+$[Macro !refLater {{} later}] $[# later 5] ${!refLater}
+expect-error: name: unknown name `later`

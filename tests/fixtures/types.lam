@@ -1,0 +1,17 @@
+Type values are normalized descriptors: record fields and variant alternatives are sorted by label.
+$[Import* std]
+$[% {Fn {'} Int}] $[% {List {List Int}}]
+expect: Fn([], Int)
+expect: List(List(Int))
+$[% {Variant {' {Field "b" Int} {Field "a" Bool}}}]
+expect: <a: Bool, b: Int>
+$[% {Pair Int {Option String}}]
+expect: {first: Int, second: <none: Unit, some: String>}
+${!assert [% {Struct {' {Field "x" Int} {Field "y" Int}}}] [% {Struct {' {Field "y" Int} {Field "x" Int}}}]} ${!assert [% {Struct {'}}] [% {Struct {'}}]}
+expect: {x: Int, y: Int}
+expect: {}
+${: 3 Int} ${: {'} [% {List Bool}]} $Type $Never
+expect: 3
+expect: []
+expect: Type
+expect: Never

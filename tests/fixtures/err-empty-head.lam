@@ -1,0 +1,3 @@
+$[Import* std]
+${head {'}}
+expect-error: runtime: head of an empty list

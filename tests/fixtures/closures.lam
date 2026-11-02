@@ -1,0 +1,33 @@
+Closures, explicit currying, shadowing, recursion, and zero-argument functions.
+$[Import* std]
+${{{^ {a} {^ {b} {- a b}}} 10} 3}
+expect: 7
+$[# adder {^ {n} {^ {x} {+ x n}}}]
+$[# add5 {adder 5}]
+${add5 1} ${map {' 1 2} {adder 10}} ${{compose {adder 1} {adder 2}} 0}
+expect: 6
+expect: [11, 12]
+expect: 3
+$[# even {^ self {n} {!if {= n 0} true {!if {= n 1} false {self {- n 2}}}}}]
+${even 10} ${even 7}
+expect: true
+expect: false
+${{^ {map} map} 4}
+expect: 4
+${{^ {x} {{^ {x} {* x 10}} {+ x 1}}} 1}
+expect: 20
+$[# k {^ {} 42}]
+${k} ${{const k 0}} ${{^ {} {{^ {} 1}}}}
+expect: 42
+expect: 42
+expect: 1
+$[# fib {^ fib {n} {!if {< n 2} n {+ {fib {- n 1}} {fib {- n 2}}}}}]
+${fib 20}
+expect: 6765
+$[# count {^ loop {n acc} {!if {= n 0} acc {loop {- n 1} {+ acc 1}}}}]
+${count 20000 0}
+expect: 20000
+A recursive lambda's name is local to it; inner closures may capture it, and it can be returned.
+$[# countTo {^ next {n limit} {^ {} {!if {>= n limit} n {{next {+ n 1} limit}}}}}]
+${{countTo 1 4}}
+expect: 4

@@ -1,0 +1,4 @@
+$[Import* std]
+$[Macro !loop {{x} {!loop x}}]
+${!loop 1}
+expect-error: limit: expansion depth

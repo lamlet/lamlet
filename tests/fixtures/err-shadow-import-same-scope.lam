@@ -1,0 +1,3 @@
+$[Import* std]
+$[Import fx-shapes] $[Import* fx-shapes] $[# origin 1]
+expect-error: name: already bound

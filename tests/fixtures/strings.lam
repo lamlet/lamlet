@@ -1,0 +1,26 @@
+Strings are Unicode scalar sequences; order is by scalar value, independent of locale.
+$[Import* std]
+${< "B" "a"} ${< "z" "é"}
+expect: true
+expect: true
+${concat {' "größe" " " "😀"}}
+expect: "größe 😀"
+${format "{} + {} = {}" {' "1" "2" {str {+ 1 2}}}}
+expect: "1 + 2 = 3"
+${format "{{literal}}" {'}}
+expect: "{literal}"
+${str true} ${str K::unit} ${str -12}
+expect: "true"
+expect: ""
+expect: "-12"
+${length {K::stringScalars "a😀b"}}
+expect: 3
+${format "tab\tnew\nline" {'}}
+expect: "tab\tnew\nline"
+${++ "\u{41}" "\u{1F600}"}
+expect: "A😀"
+${format "Price: ${}" {' {str 50}}}
+expect: "Price: $50"
+${concat {' "}" "]" "\""}} ${join ", " {' "a" "b" "c"}}
+expect: "}]\""
+expect: "a, b, c"

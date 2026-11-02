@@ -1,0 +1,3 @@
+$[Import* std]
+${map {' 1} !if}
+expect-error: syntax: a macro must be applied

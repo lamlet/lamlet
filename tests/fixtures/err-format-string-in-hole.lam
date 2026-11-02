@@ -1,0 +1,4 @@
+$[Import* std]
+$[# p 1]
+$[f "${concat "a" "b"}"]
+expect-error: syntax: cannot contain a String literal

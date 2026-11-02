@@ -1,0 +1,4 @@
+Expression nesting deeper than the checker limit (96) is a limit error, not a host stack overflow.
+$[Import* std]
+${id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id {id 1}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}
+expect-error: limit: expression nesting limit

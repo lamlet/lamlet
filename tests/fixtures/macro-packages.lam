@@ -1,0 +1,8 @@
+Macros exported by packages.
+$[Import fx-ctl]
+${!fx-ctl::unless false 1 2} $fx-ctl::limit
+expect: 1
+expect: 10
+$[ImportAs fx-ctl c]
+${!c::unless true 1 2}
+expect: 2

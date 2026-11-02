@@ -1,0 +1,4 @@
+$[Import* std]
+$[# t {time}]
+$[% [f "now $t"]]
+expect-error: stage: runtime binding `t`

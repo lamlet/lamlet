@@ -1,0 +1,3 @@
+$[Import* std]
+${{^ self {n} {self n}} 0}
+expect-error: limit: instruction budget
