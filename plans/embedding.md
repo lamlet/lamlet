@@ -35,7 +35,7 @@ What the plan builds on, as of this date (`crates/lamlet/src`):
 | JSON | `lamlet-cli` converts values to and from JSON (`value_json`, `data_json`, `json_to_typed` in `main.rs`) | Lives in the CLI, not the library |
 | Caching identity | `Program::fingerprint` (source, dependencies, language and bytecode versions, native metadata) | Nothing is persisted |
 | Panic sites | 81 `unwrap`/`expect`/`panic!` in the library: `syntax.rs` 34, `builtins.rs` 21, `check.rs` 9, `vm.rs` 5, `compile.rs` 4, others 8 | Not audited |
-| Repository | Not under version control; `lamlet-present` does not inherit the workspace license | Phase 0 |
+| Repository | Git on GitHub, MIT-licensed, tagged `v0.1.0` | No changelog yet (phase 0) |
 
 Two facts shape phase 2. First, `Code::consts` (`bytecode.rs`) stores `Value`s, so a compiled `Program` holds
 `Rc`s through its constants and not only through `Rc<Code>`. Second, static bindings and static region values
@@ -54,8 +54,9 @@ can be closures (`Value::Closure`), which capture `Rc` values and cannot be conv
 
 ## Phase 0: a releasable crate
 
-1. Put the repository under version control, with a changelog, `LICENSE-MIT` and `LICENSE-APACHE` files (the
-   manifest already says `MIT OR Apache-2.0`), and a tag per release.
+1. Put the repository under version control, with a changelog, the MIT `LICENSE` file, and a tag per release.
+   (Done: git repository on GitHub, `LICENSE`, every crate declares `license = "MIT"`, tag `v0.1.0`. The
+   changelog remains.)
 2. Publish `lamlet` (the library) so consumers can depend on a version and vendor it: crates.io, or a tagged git
    URL until then. The library keeps zero dependencies; `serde` support is an optional feature.
 3. Host adapters that serve one consumer do not belong in this repository (only synthetic hosts and examples do).
