@@ -24,6 +24,8 @@ bytecode version (`BYTECODE_VERSION`) are tracked separately from the crate vers
 - `NativeEntry::doc`.
 - `lamlet::embed` catches panics and reports them as `ErrorKind::Internal`; an instance that panicked is
   marked unusable. `Data` conversions refuse values nested deeper than the type limit.
+- `docs/embedding.md`, a guide to `lamlet::embed`, and four example hosts in `crates/lamlet/examples/` (`host_text`,
+  `host_build_check`, `host_curve`, `host_threads`) that CI runs.
 - An in-tree fuzzer (`crates/lamlet/tests/fuzz.rs`) and hostile-input tests (`crates/lamlet/tests/limits.rs`).
 - `check_source` and `SourceFile::with_origin`: diagnostics can point into a larger host file.
 - Continuous integration: tests, clippy, rustdoc, and a check that the `lamlet` library has no dependencies.

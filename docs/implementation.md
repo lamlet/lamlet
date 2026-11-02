@@ -17,6 +17,7 @@ The library has no dependencies. The CLI and the presentation adapter use `serde
 | `bytecode.rs`, `vm.rs` | Verified stack bytecode; iterative VM with explicit frames, tail calls, and budgets |
 | `builtins.rs` | The `K` table (each entry has a name, scheme, arity, and implementation), label functions, deterministic math, hash |
 | `host.rs`, `package.rs` | Native registry, host context, resolver, the embedded std |
+| `embed.rs` | The embedding surface for hosts: engine, documents, instances, typed natives, `Data` (see `docs/embedding.md`) |
 | `std/std.lam` | The standard library, written in Lamlet |
 
 ## Pipeline
@@ -59,7 +60,12 @@ makes them statically available (spec §5).
 |---|---|
 | `crates/lamlet/src/*` unit tests (21) | Schemes, numeric primitives, deterministic math, hash, constraint solving, scanner, parser |
 | `crates/lamlet/tests/semantics.rs` (56) | One rule of the spec per test, including evaluation order (observed through a logging native), primitive aliasing and wrapping, staging, budgets, natives, packages, macros, positions |
-| `tests/fixtures/*.lam` (94) | Documents whose prose states `expect:` / `expect-error:` lines; run by `crates/lamlet/tests/fixtures.rs` |
+| `tests/fixtures/*.lam` (96) | Documents whose prose states `expect:` / `expect-error:` lines; run by `crates/lamlet/tests/fixtures.rs` |
+| `crates/lamlet/tests/embed.rs` (17) | The embedding surface (`lamlet::embed`) through synthetic hosts: rendering, positions in host files, typed calls, `Data` round trips over every fixture |
+| `crates/lamlet/tests/natives.rs` (8) | Natives from Rust types, generated declarations, typed opaque handles, native errors, capabilities |
+| `crates/lamlet/tests/limits.rs` (7) | Hostile inputs: exponentially deep and large types, computed types, recursive types, deep host data, caught panics |
+| `crates/lamlet/tests/fuzz.rs` (1) | Mutated fixtures through every entry point; no input may panic (`LAMLET_FUZZ_ITERS` for longer runs) |
+| `crates/lamlet/examples/host_*.rs` | Four example hosts from `docs/embedding.md`; they assert their output and run in CI |
 | `crates/lamlet-cli/tests/cli.rs` (8) | Protocol, exit codes, typed JSON calls |
 
 All of them pass under both `cargo test` (debug) and `cargo test --release`. Debug builds matter here: the static

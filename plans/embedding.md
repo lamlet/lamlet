@@ -289,6 +289,12 @@ Each feature goes through the usual path: a rationale entry if it touches a deci
 
 ## Phase 7: documentation and examples
 
+**Status: implemented except the CLI rewrite (2026-11-01).** `docs/embedding.md` is the guide.
+`crates/lamlet/examples/` holds `host_text`, `host_build_check`, `host_curve`, and `host_threads`. Each asserts
+its own output, and CI runs all four. Until phase 2, `host_threads` shows one engine per worker thread, with
+results returned as `String` and `Data`. Rewriting the CLI on `lamlet::embed` waits for open question 2 (JSON
+in the library), because the CLI's main job is JSON.
+
 - `docs/embedding.md`: the facade, threads, natives, artifacts, error handling, with a synthetic host for each
   workload above (a text preparer, a build-time checker, an animation curve evaluator, a two-thread host). The
   hosts live in `crates/lamlet/examples/` and run in CI, so the documentation cannot drift.

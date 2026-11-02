@@ -1,8 +1,9 @@
 # Host interface
 
 Lamlet computes values. Hosts decide what values mean and when effects happen. This document is the general
-contract between Lamlet and any host. The render-lab presentation adapter, which applies this contract to
-speech-timed presentations, now lives in its own project, `lamlet-present`.
+contract between Lamlet and any host. For the Rust API that implements it, see [embedding.md](embedding.md).
+The render-lab presentation adapter, which applies this contract to speech-timed presentations, now lives in
+its own project, `lamlet-present`.
 
 ## 1. Three layers
 

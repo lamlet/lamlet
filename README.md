@@ -23,6 +23,7 @@ render-lab presentation adapter, `lamlet-present`, is a separate project.
 - [Introduction to Programming Languages](docs/programming-languages-course.md): a guided theory course using Lamlet, with exercises and an executable companion.
 - [Quick start](docs/quick-start.md): the language in ten minutes, for readers who know functional programming.
 - [Language specification](docs/spec.md): syntax, core calculus, types, stages, errors, and the `K` boundary.
+- [Embedding guide](docs/embedding.md): using Lamlet from a Rust program, with four example hosts.
 - [Host interface](docs/host.md): pure descriptions, and the contract every host follows.
 - [Design rationale](docs/rationale.md): the decisions behind the language, and the alternatives considered.
 - [Implementation notes](docs/implementation.md): modules, status, tests, limits.
