@@ -202,6 +202,8 @@ pub enum RegionKind {
     Brace,
     /// `$[...]`
     Bracket,
+    /// `$f"{...}"` or `$latex"{...}"`: a raw template
+    Template,
 }
 
 /// A scanned document segment.
@@ -315,6 +317,18 @@ pub fn scan_document(file: u32, text: &str) -> DResult<Vec<Segment>> {
                     i = end;
                     text_start = i;
                 }
+                Some(_) if raw_template_head(text, i + 1).is_some() => {
+                    flush(&mut segments, &mut display, text_start, i);
+                    let body = raw_template_head(text, i + 1).unwrap();
+                    let end = raw_template_end(text, body).map_err(|(m, a, b, _)| Diagnostic::new(DiagKind::Syntax, m, Some(Span::new(file, a, b))))?;
+                    segments.push(Segment::Region {
+                        kind: RegionKind::Template,
+                        span: Span::new(file, i, end),
+                        inner: Span::new(file, i + 1, end),
+                    });
+                    i = end;
+                    text_start = i;
+                }
                 Some(c) if is_word_start(c) => {
                     flush(&mut segments, &mut display, text_start, i);
                     let end = scan_qualified_word(text, i + 1);
@@ -388,6 +402,11 @@ pub fn raw_form_end(text: &str, open: usize) -> Result<usize, (String, usize, us
                     return Ok(i + 1);
                 }
             }
+            b'f' | b'l' if raw_template_open(text, i).is_some() => {
+                let body = raw_template_open(text, i).unwrap();
+                i = raw_template_end(text, body).map_err(|(m, a, b, _)| (m, a, b))?;
+                continue;
+            }
             b'"' => {
                 let start = i;
                 i += 1;
@@ -411,6 +430,22 @@ pub fn raw_form_end(text: &str, open: usize) -> Result<usize, (String, usize, us
 
 /// Find the end (exclusive) of a balanced active region starting at the opener at `open`.
 fn match_region(file: u32, text: &str, open: usize) -> DResult<usize> {
+    code_end(text, open).map_err(|(m, a, b, opened)| {
+        let d = Diagnostic::new(DiagKind::Syntax, m, Some(Span::new(file, a, b)));
+        match opened {
+            Some(at) => d.note("opened here", Some(Span::new(file, at, at + 1))),
+            None => d,
+        }
+    })
+}
+
+/// An error found while balancing code: its message, its byte range in the text, and where the delimiter it
+/// concerns was opened, if it has one.
+pub type ScanError = (String, usize, usize, Option<usize>);
+
+/// End (exclusive) of balanced code whose opener (`{` or `[`) is at `open`: Strings, comments, and raw templates
+/// are skipped whole, so delimiters inside them do not count.
+pub fn code_end(text: &str, open: usize) -> Result<usize, ScanError> {
     let bytes = text.as_bytes();
     let mut stack: Vec<(u8, usize)> = Vec::new();
     let mut i = open;
@@ -425,7 +460,12 @@ fn match_region(file: u32, text: &str, open: usize) -> DResult<usize> {
             }
             // A raw `;{...}`/`;[...]` comment body.
             b';' if matches!(bytes.get(i + 1), Some(b'{') | Some(b'[')) => {
-                i = raw_form_end(text, i + 1).map_err(|(m, a, b)| Diagnostic::new(DiagKind::Syntax, m, Some(Span::new(file, a, b))))?;
+                i = raw_form_end(text, i + 1).map_err(|(m, a, b)| (m, a, b, None))?;
+                continue;
+            }
+            // A raw template, `f"{...}"` or `latex"{...}"`.
+            b'f' | b'l' if raw_template_open(text, i).is_some() => {
+                i = raw_template_end(text, raw_template_open(text, i).unwrap())?;
                 continue;
             }
             b'{' => stack.push((b'}', i)),
@@ -433,12 +473,12 @@ fn match_region(file: u32, text: &str, open: usize) -> DResult<usize> {
             b'}' | b']' => {
                 let (expected, at) = stack.pop().expect("region stack");
                 if bytes[i] != expected {
-                    return Err(Diagnostic::new(
-                        DiagKind::Syntax,
+                    return Err((
                         format!("mismatched delimiter: expected `{}`, found `{}`", expected as char, bytes[i] as char),
-                        Some(Span::new(file, i, i + 1)),
-                    )
-                    .note("opened here", Some(Span::new(file, at, at + 1))));
+                        i,
+                        i + 1,
+                        Some(at),
+                    ));
                 }
                 if stack.is_empty() {
                     return Ok(i + 1);
@@ -449,7 +489,7 @@ fn match_region(file: u32, text: &str, open: usize) -> DResult<usize> {
                 i += 1;
                 loop {
                     if i >= bytes.len() {
-                        return syntax_err("unterminated string literal", Span::new(file, start, bytes.len()));
+                        return Err(("unterminated string literal".into(), start, bytes.len(), None));
                     }
                     match bytes[i] {
                         b'\\' => i += 2,
@@ -463,7 +503,40 @@ fn match_region(file: u32, text: &str, open: usize) -> DResult<usize> {
         i += 1;
     }
     let at = stack.first().map(|s| s.1).unwrap_or(open);
-    syntax_err("unterminated active region", Span::new(file, at - 1, text.len()))
+    Err(("unterminated active region".into(), at.saturating_sub(1), text.len(), None))
+}
+
+/// When a raw template (`f"{...}"` or `latex"{...}"`) opens at `i`, where its body starts. The head must start a
+/// token: it follows the start of the text, whitespace, or a delimiter.
+pub fn raw_template_open(text: &str, i: usize) -> Option<usize> {
+    let starts_token = text[..i].chars().next_back().is_none_or(|p| p.is_whitespace() || matches!(p, '{' | '[' | '}' | ']'));
+    if !starts_token {
+        return None;
+    }
+    raw_template_head(text, i)
+}
+
+/// Where a raw template's body starts, when `text` at `i` starts with `f"{` or `latex"{`.
+fn raw_template_head(text: &str, i: usize) -> Option<usize> {
+    ["f\"{", "latex\"{"].iter().find(|head| text[i..].starts_with(**head)).map(|head| i + head.len())
+}
+
+/// End (exclusive, after the closing `}"`) of a raw template whose body starts at `body`. The body ends at the
+/// first `}"` outside a hole; `$$` is skipped, and a `${...}`/`$[...]` hole is balanced code (§`code_end`), so it
+/// may hold Strings and other templates.
+pub fn raw_template_end(text: &str, body: usize) -> Result<usize, ScanError> {
+    let b = text.as_bytes();
+    let mut i = body;
+    while i < b.len() {
+        match b[i] {
+            b'}' if b.get(i + 1) == Some(&b'"') => return Ok(i + 2),
+            b'$' if b.get(i + 1) == Some(&b'$') => i += 2,
+            b'$' if matches!(b.get(i + 1), Some(b'{') | Some(b'[')) => i = code_end(text, i + 1)?,
+            _ => i += 1,
+        }
+    }
+    let head = text[..body].rfind(['f', 'l']).unwrap_or(body);
+    Err(("unterminated template: its text ends at the first `}\"` outside a `$` hole".into(), head, text.len(), None))
 }
 
 #[cfg(test)]

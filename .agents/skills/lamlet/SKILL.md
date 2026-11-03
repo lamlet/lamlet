@@ -8,7 +8,7 @@ description: >-
   also use `lamlet-documents`; for Rust hosts and extensions, `lamlet-embedding`.
 ---
 
-# Lamlet expert guide (language version 0.2)
+# Lamlet expert guide (language version 0.3)
 
 Lamlet is a strict, typed lambda calculus with:
 
@@ -70,6 +70,8 @@ x.f   {x.f a b}   x.f.g call sugar: {f x}, {f x a b}, {g {f x}}  (no space befor
 [% expr]                evaluate at compile time; the result is embedded as a constant
 [f "Hi $name, ${expr}"] string template: each hole is typed (Scalar); $$ is a literal $
 [latex "\frac{$a}{2}"]  LaTeX template: raw backslashes; result type Latex = {latex: String}
+f"{He said "hi", $name}"  raw template (an atom): text as written up to the first }" outside a hole; no
+latex"{\frac{$a}{2}}"     escapes; holes may hold Strings. Same value as [f "..."] / [latex "..."]
 [Import p]  [Import* p]  [ImportAs p alias]            imports (lexical, source order)
 [Macro !name {pattern template} ...]                   pattern macro
 [Native name {Fn {' A B} R} "api.id/x" Pure|Static|Runtime]   typed host function (signature runs as [% …])
@@ -113,6 +115,7 @@ A `.lam` file is a document (spec §10). Only `$`-spellings are active:
 | `$name`, `$pkg::name` | reads a binding, no call. A following `.` is prose: `I am $AGE.` reads `AGE` |
 | `${…}` | an expression region |
 | `$[…]` | a declaration, import, macro, native, `[% ]`, or template |
+| `$f"{…}"`, `$latex"{…}"` | a raw template as a region: `I am $f"{${.age p} years}" old` |
 | `$;{…}`, `$;[…]` | a disabled region: inert text, dropped from the output |
 | `$$` | a literal `$`; any other `$` not followed by a name, `{`, or `[` is prose (`$5`, `$ {x}`) |
 
@@ -264,7 +267,10 @@ polymorphism through bindings, parsing with options, state machines, `!pipe`/`!l
 from data, and curve combinators. `cargo test` checks every `expect:` line in both. Patterns to reach for:
 
 - **Loops:** use `fold`, `map`, `filter`, and `range`, or a tail-recursive named lambda with an accumulator.
-- **Text:** use `[f "..."]` for typed interpolation. `format` takes `List(String)`, so convert values with `str`
+- **Text:** use `f"{...}"` (or `[f "..."]`) for typed interpolation. Prefer the raw form when the text has
+  quotes or a hole needs a String: `f"{${.name p} said "${.words p}"}"`. A hole holds a *form*, so `${age}`
+  calls `age`: read a binding with `$age`, a field with `${.age p}`. Likewise `${f"{…}"}` calls the String;
+  in prose write `$f"{…}"`. `format` takes `List(String)`, so convert values with `str`
   first. `++` concatenates two Strings; `concat` and `join` work on lists. `chars` splits a String into scalars,
   and `substr`/`split` work on Strings.
 - **Options:** `some`, `none`, `withDefault`, `caseOption`.
@@ -316,7 +322,8 @@ The top ten (more, with exact diagnostics, in `references/errors.md`):
 | `{p.name}` to read a field | `{.name p}` |
 | `std.map`, `K.add` | `std::map`, `K::add` |
 | `{list 1 2}`, `{concat "a" "b"}` | `{' 1 2}`, `{++ "a" "b"}` |
-| `[f "${str "x"}"]` (quote in a hole) | `[# s "x"] [f "$s"]` |
+| `[f "${str "x"}"]` (quote in a hole) | `f"{${str "x"}}"`, or `[# s "x"] [f "$s"]` |
+| `f"{I am ${age}}"`, `${f"{…}"}` | `f"{I am $age}"`; `$f"{…}"` in prose (a hole or `${}` holds a form, which calls) |
 | Static code using `[# x {...}]` | `[# x [% {...}]]` |
 
 

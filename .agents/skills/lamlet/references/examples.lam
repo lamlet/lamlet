@@ -74,6 +74,12 @@ expect: "x, y"
 $[latex "\frac{$who}{2}"]
 expect: {latex: "\\frac{Ada}{2}"}
 
+Raw templates: text exactly as written up to }", so quotes need no escapes and a hole may hold a String.
+$[# {said p} f"{${.name p} said "${.words p}" ${str "(twice)"}}"]
+${said {. name "Ada" words "hi"}} ${latexSource latex"{\frac{$who}{2}}"}
+expect: "Ada said \"hi\" (twice)"
+expect: "\\frac{Ada}{2}"
+
 Static evaluation and compile-time assertions.
 $[# table [% {map {range 0 5} square}]]
 $table ${!assert {length table} 5}

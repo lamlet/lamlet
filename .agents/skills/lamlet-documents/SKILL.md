@@ -51,7 +51,11 @@ How a region's value becomes output:
 | `Content` (the `content` package, §4) | structure: emphasis, links, tables, ... |
 | anything else (a list, a record, a variant, a function) | its written form as code: `` `[1, 2]` ``, `` `#some(3)` `` |
 
-To show your own type well, convert it: `$[# {showPoint p} [f "(${.x p}, ${.y p})"]]`.
+To show your own type well, convert it: `$[# {showPoint p} f"{(${.x p}, ${.y p})}"]`.
+
+Text with values in it is a raw template region, `$f"{...}"`: `She said $f"{"hi", I am $who}" today.` Its text
+is copied as written and escaped like any String (it is a String). `${f"{...}"}` is wrong: `${...}` holds a
+form, and the form `{x}` calls `x`.
 
 A line that held only declarations (and spaces) is removed, so the imports and bindings at the top leave no
 blank lines.

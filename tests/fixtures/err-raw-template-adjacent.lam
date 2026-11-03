@@ -1,0 +1,3 @@
+$[Import* std]
+${++ f"{a}"x "y"}
+expect-error: syntax: expected whitespace or a delimiter after this token

@@ -38,7 +38,7 @@ pub use package::{Exports, MemoryResolver, PackageSource, Resolver};
 pub use value::Value;
 pub use vm::{Limits, RuntimeError};
 
-pub const LANGUAGE_VERSION: &str = "0.2.0";
+pub const LANGUAGE_VERSION: &str = "0.3.0";
 
 /// FNV-1a 64-bit hash (stable across platforms and runs).
 pub fn fnv1a(bytes: &[u8]) -> u64 {

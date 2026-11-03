@@ -1,0 +1,46 @@
+Raw templates: f"{...}" and latex"{...}" hold their text exactly as written, up to the first }" outside a hole.
+Quotes, backslashes, and lone brackets need no escapes, and holes may contain Strings and other templates.
+
+$[Import* std]
+$[# who "Ada"]
+$[# {greet p} f"{Hello, I am "${.name p}", ${.age p} years old.}"]
+${greet {. name "Ada" age 36}}
+expect: "Hello, I am \"Ada\", 36 years old."
+
+A backslash is text, $$ is a dollar, and a hole holds a String or another template.
+${++ f"{He said "hi" to [me] at \n {braces} $$5, ${str "x"} and ${++ f"{in$who}" "ner"}}" ""}
+expect: "He said \"hi\" to [me] at \\n {braces} $5, x and inAdaner"
+
+Unbalanced braces, brackets, and quotes in the text do not end the region around it.
+${++ f"{a } b ] c " d {}" ""} ;; a comment
+expect: "a } b ] c \" d {"
+
+The one text a raw template cannot hold, }", goes in a hole.
+${++ f"{a ${str "}\""} b}" ""}
+expect: "a }\" b"
+
+LaTeX, raw as always.
+${latexSource latex"{\frac{$who}{2}}"}
+expect: "\\frac{Ada}{2}"
+
+Hygiene: names in the holes of a template a macro introduces resolve where the macro is defined.
+$[# {exclaim s} {++ s "!"}]
+$[Macro !hello {{x} {{^ {v} f"{Hello, ${exclaim v}}"} x}}]
+${{^ {} [# exclaim 0] {!hello who}}}
+expect: "Hello, Ada!"
+
+A template that starts with a newline loses it, the shared indentation, and a final blank line, as [f "..."] does.
+${++ f"{
+    two
+      lines
+    }" ""}
+expect: "two\n  lines\n"
+
+A template in a lambda, and `f` is still an ordinary name where no `"{` follows it.
+$[# f 2]
+${map {' 1 2} {^ {n} f"{#$n}"}} ${+ f 1}
+expect: ["#1", "#2"]
+expect: 3
+
+In prose, a dollar before a raw template makes it a region of its own: $f"{I am $who.}"
+expect: "I am Ada."

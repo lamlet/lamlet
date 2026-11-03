@@ -4,6 +4,19 @@ All notable changes to this project are listed here. Versions follow [Semantic V
 while the version is `0.x`, a minor release may break the API. The language version (`LANGUAGE_VERSION`) and
 bytecode version (`BYTECODE_VERSION`) are tracked separately from the crate version.
 
+## Unreleased
+
+Language version 0.3.0. Documents written for 0.2.0 keep working, except prose with `$f"{` or `$latex"{`, which
+now opens a region.
+
+### Added
+
+- Raw templates: `f"{Hello, I am "${.name p}", $age years old.}"` and `latex"{...}"`. The text runs, exactly as
+  written, to the first `}"` outside a hole, with no escapes, so quotes, backslashes, and unbalanced brackets
+  need none. Holes are balanced code and may contain Strings and other templates. In a document,
+  `$f"{...}"` is a region. `[f "..."]` and `[latex "..."]` are unchanged (language change; spec §2.3,
+  rationale D13).
+
 ## 0.3.1 (2026-11-02)
 
 ### Fixed

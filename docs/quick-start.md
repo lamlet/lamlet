@@ -297,15 +297,26 @@ $[# who "Ada"]
 $[f "Hello, $who! 2 + 2 = ${+ 2 2}."]                 ;; "Hello, Ada! 2 + 2 = 4."
 ```
 
-A hole cannot contain a string literal, because the quote would end the template; bind the String first. There
-is also a runtime formatter and a joiner:
+In `[f "..."]` a quote ends the template, so a quote in the text is written `\"` and a hole cannot contain a
+String literal. The raw form `f"{...}"` has neither limit: its text, exactly as written, runs to the first `}"`
+outside a hole, with no escapes.
+
+```text
+$[# {quote p} f"{${.name p} said "${.words p}"}"]   ;; Ada said "hi" (for {. name "Ada" words "hi"})
+$f"{a ${str "x"} b}"                                 ;; a x b: a hole may hold a String
+In prose, $f"{I am $who.}" is a region.              ;; In prose, I am Ada. is a region.
+```
+
+A hole `${...}` holds a form, so `${age}` *calls* `age`; read a binding with `$age`. There is also a runtime
+formatter and a joiner:
 
 ```text
 ${format "{} and {}" {' "a" {str 1}}}     ;; "a and 1"
 ${join ", " {' "x" "y"}}                  ;; "x, y"
 ```
 
-`[latex "..."]` is the same idea for formulas. Backslashes are literal, and the result has type `Latex`.
+`[latex "..."]` (or `latex"{...}"`) is the same idea for formulas. Backslashes are literal, and the result has
+type `Latex`.
 
 ## 9. Packages and the primitives
 

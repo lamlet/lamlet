@@ -211,6 +211,26 @@ comments keep braces/brackets balanced and Strings closed; their bodies otherwis
 comments. Tilde remains available as an ordinary symbolic identifier. Comment text can still document the
 following declaration.
 
+## D13. Raw templates, `f"{...}"`
+
+**Decision.** `f"{text}"` and `latex"{text}"` are templates whose text runs, exactly as written, to the first
+`}"` outside a hole. Their holes are balanced code, so they may hold Strings. `[f "..."]` and `[latex "..."]`
+stay. In a document, `$f"{...}"` is a region.
+
+**Why.** In `[f "..."]` a quote ends the template, so prose with quotes needs `\"`, and a hole cannot hold a
+String literal at all. Text without delimiters (`[f Hello, ${...}]`) would need balanced brackets and an escape
+for a lone `]`. `}"` is a terminator that ordinary text almost never contains, and the one text it excludes is
+still expressible without an escape character, as a hole: `${str "}\""}`.
+
+**Alternatives.** `[f "{...}"]` would keep templates in brackets, but `[f "{a} b"]` is already a valid template
+whose text starts with a brace, so it would change meaning. `f"` was a syntax error before (a token must be
+followed by whitespace or a delimiter), so no document meant anything by it.
+
+**Cost.** Templates were the bracket forms that parse a literal at compile time; the raw form is an atom
+instead, an exception to "brackets are where the compiler acts on syntax" (§2.3), justified as a literal, like
+a String or a number. In prose, `$f"{` now opens a region where it used to read the binding `f` followed by
+the text `"{`.
+
 ## Known limitations
 
 - No mutual recursion, recursive types (other than List), polymorphic computed types, abstract types, or type

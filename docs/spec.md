@@ -1,6 +1,6 @@
 # Lamlet language specification
 
-This is the normative description of Lamlet, language version 0.2.0, as implemented by the interpreter in
+This is the normative description of Lamlet, language version 0.3.0, as implemented by the interpreter in
 `crates/lamlet`. Anything marked **(future)** is not implemented. Supporting documents:
 
 - [quick-start.md](quick-start.md): a tutorial
@@ -37,6 +37,7 @@ Recommended names (camel case for values, capitalized types, `_` in package name
 |---|---|
 | `42`, `-8`, `1.5`, `2e3` | Int / Float literal |
 | `"text"` | String (escapes `\" \\ \n \t \r \0 \u{hex}`) |
+| `f"{text}"`, `latex"{text}"` | Raw template: a template literal (§2.3) whose text is exactly as written, with no escapes |
 | `true`, `false` | Bool |
 | `x`, `pkg::x`, `+` | Variable (lexical or qualified) |
 | `.label` | Field getter: a function value |
@@ -88,8 +89,22 @@ Why these need special syntax:
   `[latex]` it is a Latex value (inserted as source) or a Scalar (formatted, and escaped if it is a String).
   Per-hole typing is what lets one template mix values of different types without variadic functions.
 
-Brackets are therefore exactly the places where the compiler acts on syntax. Braces are the places where
-evaluation happens.
+Brackets are therefore exactly the places where the compiler acts on syntax, with one exception: the raw
+template literals below, which are templates written as atoms. Braces are the places where evaluation happens.
+
+**Raw templates.** `f"{text}"` is `[f "text"]`, and `latex"{text}"` is `[latex "text"]`, with these differences:
+
+- **The text ends at the first `}"` outside a hole.** Quotes, backslashes, and unbalanced braces or brackets in
+  the text are literal: `f"{He said "hi" [sic]}"`. There are no escapes, in `f` either.
+- **Holes are balanced code** (Strings, comments, and raw templates inside them are skipped whole), so a hole may
+  contain a String literal or another template: `f"{${str "x"} and ${++ f"{in$who}" "ner"}}"`. A literal `}"` is
+  written as a hole: `${str "}\""}`.
+- Holes, `$$`, typing, and the removal of a leading newline and shared indentation are the same as in `[f]` and
+  `[latex]`.
+- **The head starts a token.** `f"{` and `latex"{` open a raw template after the start of the code,
+  whitespace, or a delimiter; `f` and `latex` remain ordinary names everywhere else. Like any token, a raw
+  template must be followed by whitespace or a delimiter.
+- In a document, `$f"{...}"` and `$latex"{...}"` are regions of their own (§10).
 
 ### 2.4 Bodies and definition contexts
 
@@ -129,6 +144,7 @@ Scoping rules:
 | `{!case v {a x ea} ...}` (std macro) | `K::match(v, {. a λ(x).ea ...})` |
 | `{!assert a b}` | `[% {assertEqual a b}]` |
 | `[f "a $x b"]` | `K::stringAppend` chain over literal text and `K::scalarString(x)` |
+| `f"{a $x b}"`, `latex"{a $x b}"` | `[f "a $x b"]`, `[latex "a $x b"]`, with the text taken as written (§2.3) |
 | `{: e T}` | `e`, after checking against the value of `[% T]` |
 | `r.f` | `{f r}` |
 | `{r.f a ...}` (at a brace head) | `{f r a ...}` |
@@ -459,6 +475,7 @@ bindings, produces no values, and is not a scope boundary.
 | `$name`, `$pkg::name` | A lookup region: reads a binding (no call) |
 | `${...}` | An expression region |
 | `$[...]` | A bracket form: a declaration, import, `[% ]`, or template |
+| `$f"{...}"`, `$latex"{...}"` | An expression region holding one raw template (§2.3) |
 | `$;{...}`, `$;[...]` | A disabled region: inert, and not part of the displayed prose |
 | `$$` | A literal `$` in prose |
 | Any other `$` | Prose: `$50`, `$ {x}` |
@@ -467,8 +484,8 @@ Scanning rules:
 
 - **Commitment.** Once `${` or `$[` is seen, the scanner commits to code. An unterminated or malformed region is a
   diagnostic, never silently treated as prose.
-- **Balancing.** Delimiter balancing respects Strings, so `"}"` and `"$x"` inside code do not end a region or
-  open another one.
+- **Balancing.** Delimiter balancing respects Strings and raw templates, so `"}"`, `"$x"`, and
+  `f"{ } ]}"` inside code do not end a region or open another one.
 - **Disabled regions.** Their bodies are raw text, with balanced braces/brackets and closed Strings, just
   like block comments inside code. Dollars and semicolons in the body have no special meaning.
 - **Strings are never re-scanned.** An evaluated String is data and never becomes code.

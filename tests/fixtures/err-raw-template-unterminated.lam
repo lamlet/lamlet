@@ -1,0 +1,3 @@
+$[Import* std]
+${++ f"{a "quoted" text" "x"}
+expect-error: syntax: unterminated template
