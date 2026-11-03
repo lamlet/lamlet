@@ -162,7 +162,7 @@ gets the path of the `lamlet` program in the `LAMLET` environment variable.
 An extension is a git repository with a Rust program that depends on `lamlet` and `lamlet-doc` by git tag:
 
 ```sh
-cargo install --git https://github.com/OppositeNor/lamlet-present
+cargo install --git https://github.com/lamlet/lamlet-present
 lamlet present schedule deck.lam --fps 30        # runs lamlet-present schedule deck.lam --fps 30
 ```
 

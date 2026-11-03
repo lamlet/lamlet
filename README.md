@@ -26,6 +26,7 @@ of document are extensions in their own repositories, such as `lamlet-present` f
 - [Language specification](docs/spec.md): syntax, core calculus, types, stages, errors, and the `K` boundary.
 - [Embedding guide](docs/embedding.md): using Lamlet from a Rust program, with four example hosts.
 - [Host interface](docs/host.md): pure descriptions, and the contract every host follows.
+- [Naming conventions](docs/conventions.md): recommended names for code, packages, ids, files, and extensions.
 - [Design rationale](docs/rationale.md): the decisions behind the language, and the alternatives considered.
 - [Implementation notes](docs/implementation.md): modules, status, tests, limits.
 

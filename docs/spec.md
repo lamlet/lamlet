@@ -28,6 +28,9 @@ document text ──scan──▶ regions ──read──▶ syntax trees ─�
 
 ## 2. Surface syntax inside a region
 
+Recommended names (camel case for values, capitalized types, `_` in package names) are in
+[conventions.md](conventions.md); they are not part of the language.
+
 ### 2.1 Atoms
 
 | Atom | Meaning |

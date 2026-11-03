@@ -1,8 +1,8 @@
 # Design rationale
 
-The governing question: what is the smallest coherent functional language that can compute render-lab's
-descriptions without putting presentation semantics into the language? Each decision below records the
-alternatives that were considered.
+The governing question: what is the smallest coherent functional language that can compute a host's
+descriptions (such as an animated, narrated presentation) without putting presentation semantics into the
+language? Each decision below records the alternatives that were considered.
 
 ## D1. Every primitive is an ordinary value with an ordinary type
 
@@ -146,12 +146,13 @@ than overflowing a 2 MiB thread stack.
 
 - Presentation behavior is data: variants of actions, and curves as functions of time.
 - Speech is a description, timed by host measurements.
-- The render-lab adapter lowers to render-lab's existing `Timeline`, so render-lab remains the only scheduler.
+- A host lowers the descriptions to its own timeline (render-lab, for example, to its `Timeline`), so the host
+  remains the only scheduler.
 
 **Why.** Replay, seeking, and offline rendering come for free, because both sides are pure functions of time.
 Evaluation can never trigger playback.
 
-**Alternative considered.** *Lamlet calling render-lab APIs per frame through natives.* That couples the language
+**Alternative considered.** *Lamlet calling a host's APIs per frame through natives.* That couples the language
 runtime to the frame loop, and makes determinism depend on native behavior.
 
 ## D11. `::` for modules, `.` for lexical call sugar
