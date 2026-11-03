@@ -7,7 +7,7 @@ description: >-
   Lamlet from Rust.
 ---
 
-# Lamlet expert guide (language version 0.1)
+# Lamlet expert guide (language version 0.2)
 
 Lamlet is a strict, typed lambda calculus with:
 
@@ -46,7 +46,7 @@ not in this guide, `references/std.md`, or `docs/spec.md`, it does not exist.
 ## 2. Syntax, complete
 
 ```text
-; line comment          ~{ disabled form }      ~[ disabled form ]       $~{...} disabled region (in prose)
+;; line comment         ;{ disabled form }      ;[ disabled form ]       $;{...} / $;[...] disabled region (in prose)
 
 42  -8  1.5  2e3  "text\n\u{41}"  true  false   literals (no implicit Int↔Float)
 x   pkg::x   K::add   +   std::+                names; `::` separates module paths, never `.`
@@ -78,7 +78,10 @@ Spacing is significant around the dot:
 - `{.x r}` reads field `x` of `r`.
 - `{r.x}` calls a function named `x` with `r`.
 
-Every token must be separated by whitespace or a delimiter; the dot of the call sugar is the only exception.
+Every token must be separated by whitespace, a delimiter, or a comment; the dot of the call sugar is the
+only exception. A lone `;` inside code is a syntax error. Balanced comments contain raw text with balanced
+braces/brackets and closed Strings; `;;` has no special meaning inside them. Strings and prose retain literal
+semicolons. `~` is an ordinary symbolic identifier.
 
 ### Bodies
 
@@ -278,8 +281,8 @@ Don't emulate these by guessing at syntax:
 ## 8. Workflow: always verify
 
 1. Write the document. Start with `$[Import* std]`.
-2. Run it with `cargo run -q --release -p lamlet --example run -- FILE.lam`. It prints `[region] value`, or the
-   first diagnostic with its location. For structured output, use
+2. Run it with `./target/release/lamlet FILE.lam`. It prints the document with each region's value filled in, or
+   the first diagnostic with its location. For each region's value and type, use
    `./target/release/lamlet eval FILE.lam` (JSON), or `lamlet check` for types only.
 3. On an error, look up its kind and message in `references/errors.md`, and read the diagnostic's notes.
 4. To check the type of something, put it alone in a `${...}` region and run `lamlet eval`: the JSON shows each

@@ -7,11 +7,8 @@ ${++ "a;b" ";"}
 expect: "a;b;"
 ${+ 1 ;{a raw body; with a semicolon} 2}
 expect: 3
-$[# twice {^ {x}
-    ;; Doubles the input.
-    ;; Used below.
-    [# d {* 2 x}]   ;; a trailing comment after a form
-    d}]
+$[# {twice x} [# d {* 2 x}]   ;; a trailing comment after a form
+    d]
 ${twice 21}
 expect: 42
 ${' 1;;no space needed after a token

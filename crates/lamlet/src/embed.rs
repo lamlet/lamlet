@@ -1,6 +1,6 @@
 //! The embedding surface: check, prepare, and evaluate Lamlet documents inside a host program.
 //!
-//! This module is the supported API for hosts (see `plans/embedding.md`). Everything a host needs is
+//! This module is the supported API for hosts (see `docs/embedding.md`). Everything a host needs is
 //! reachable from here, including re-exports of the value, type, and native-registry types; the other modules
 //! of the crate are implementation details and may change in minor releases.
 //!
@@ -1276,7 +1276,7 @@ impl NativeRegistry {
                 out.push_str(&prose(&lines.join("\n")));
                 out.push('\n');
             }
-            out.push_str(&format!("$[Native {} [% {}] {:?} {}]\n", name, sig, e.api_id, e.availability.as_str()));
+            out.push_str(&format!("$[Native {} {} {:?} {}]\n", name, sig, e.api_id, e.availability.as_str()));
         }
         Ok(out)
     }

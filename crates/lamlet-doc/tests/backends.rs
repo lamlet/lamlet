@@ -1,10 +1,10 @@
-//! The backends, the `content` package, parsed prose, and speech.
+//! The backends, the `content` package, and parsed prose.
 //!
 //! `tests/golden/everything.lam` uses every node; its output in each backend is kept in `tests/golden/`. To
 //! accept a deliberate change, run with `UPDATE_GOLDEN=1` and review the diff.
 
 use lamlet::embed::*;
-use lamlet_doc::backend::{html, json, markdown, speech, text};
+use lamlet_doc::backend::{html, json, markdown, text};
 use lamlet_doc::{Doc, Error, COMMONMARK, TEXT};
 use std::path::Path;
 
@@ -39,12 +39,11 @@ fn golden_everything() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden");
     let source = std::fs::read_to_string(dir.join("everything.lam")).unwrap();
     let ir = lower("everything.lam", &source, COMMONMARK).unwrap_or_else(|e| panic!("{e}"));
-    let outputs: [(&str, Result<String, Error>); 5] = [
+    let outputs: [(&str, Result<String, Error>); 4] = [
         ("txt", text::write(&ir)),
         ("md", markdown::write(&ir)),
         ("html", html::write(&ir)),
         ("ir.json", json::write(&ir)),
-        ("speech.json", speech::write(&ir)),
     ];
     let update = std::env::var_os("UPDATE_GOLDEN").is_some();
     for (ext, out) in outputs {
@@ -183,59 +182,6 @@ fn parsed_prose_puts_regions_where_they_stand() {
     assert_eq!(h("\n| a | b |\n|---|:-:|\n| 1 | `\\|` |"), "<table>\n<thead>\n<tr><th>a</th><th>b</th></tr>\n</thead>\n<tbody>\n<tr><td>1</td><td><code>|</code></td></tr>\n</tbody>\n</table>");
     assert_eq!(h("\n[a *b*](u) ![i](s.png \"t\") <https://x.y> \\*lit\\*"), "<p><a href=\"u\">a <em>b</em></a> <img src=\"s.png\" alt=\"i\" title=\"t\"> <a href=\"https://x.y\">https://x.y</a> *lit*</p>");
     assert_eq!(h("\nsnake_case_name and 2*3*4"), "<p>snake_case_name and 2<em>3</em>4</p>");
-}
-
-#[test]
-fn speech_cuts_pieces_at_anchors_and_spans() {
-    let src = format!(
-        "{HEAD}\n# One {{#one}}\n\nFirst ${{anchor \"m0\" {{' {{attr \"k\" \"v\"}}}}}}words, ${{span \"r\" {{'}} {{text \"a range\"}}}} end${{pause 0.5}}.\n\n${{say {{math \"x^2\"}} \"x squared\"}} is shown.\n\n## Two {{#two}}\n\nLast."
-    );
-    let ir = lower("s.lam", &src, COMMONMARK).unwrap();
-    let us = speech::utterances(&ir).unwrap();
-    assert_eq!(us.len(), 3);
-    assert_eq!(us[0].section, ["one"]);
-    assert_eq!(us[0].pieces, ["First", "words,", "a range", "end", "."]);
-    assert_eq!(us[0].spoken, "First words, a range end.");
-    let kinds: Vec<(usize, String)> = us[0]
-        .anchors
-        .iter()
-        .map(|a| {
-            let k = match &a.kind {
-                speech::AnchorKind::Point { name, .. } => format!("point {name}"),
-                speech::AnchorKind::Open { name, .. } => format!("open {name}"),
-                speech::AnchorKind::Close { name } => format!("close {name}"),
-                speech::AnchorKind::Pause { seconds } => format!("pause {seconds}"),
-            };
-            (a.piece, k)
-        })
-        .collect();
-    assert_eq!(kinds, [(1, "point m0".into()), (2, "open r".into()), (3, "close r".into()), (4, "pause 0.5".into())]);
-    assert_eq!(us[1].spoken, "x squared is shown.");
-    assert_eq!(us[1].shown, "x^2 is shown.");
-    assert_eq!(us[2].section, ["one", "two"]);
-    let e = speech::utterances(&lower("s.lam", &format!("{HEAD}A ${{math \"x\"}}."), TEXT).unwrap()).unwrap_err();
-    assert!(e.render().contains("has no spoken form"), "{}", e.render());
-}
-
-#[test]
-fn unparsed_prose_speaks_one_utterance_per_paragraph() {
-    let ir = lower("s.lam", &format!("{HEAD}\nOne line\ncontinues.\n\nTwo ${{emph \"here\"}}.\n"), TEXT).unwrap();
-    let us = speech::utterances(&ir).unwrap();
-    let spoken: Vec<&str> = us.iter().map(|u| u.spoken.as_str()).collect();
-    assert_eq!(spoken, ["One line continues.", "Two here."]);
-}
-
-#[test]
-fn translations_align_with_their_original() {
-    let doc = |body: &str| speech::utterances(&lower("t.lam", &format!("{HEAD}{body}"), COMMONMARK).unwrap()).unwrap();
-    let original = doc("\n# A {#a}\n\nOne ${anchor \"m\" {'}}cue.\n\nTwo.\n\n# B {#b}\n\nThree.");
-    assert!(speech::align(&original, &doc("\n# 甲 {#a}\n\n一。\n\n二。\n\n# 乙 {#b}\n\n三。")).is_ok());
-    let fewer = speech::align(&original, &doc("\n# 甲 {#a}\n\n一。\n\n# 乙 {#b}\n\n三。")).unwrap_err().render();
-    assert!(fewer.contains("section `a` has 1 paragraphs here but 2 in the original"), "{fewer}");
-    let cues = speech::align(&original, &doc("\n# 甲 {#a}\n\n一${anchor \"m\" {'}}。\n\n二。\n\n# 乙 {#b}\n\n三。")).unwrap_err().render();
-    assert!(cues.contains("carries no anchors"), "{cues}");
-    let renamed = speech::align(&original, &doc("\n# 甲 {#a}\n\n一。\n\n二。\n\n# 乙 {#c}\n\n三。")).unwrap_err().render();
-    assert!(renamed.contains("section 2 is `c` here but `b`"), "{renamed}");
 }
 
 #[test]

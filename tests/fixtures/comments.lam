@@ -13,7 +13,7 @@ expect: 42
 ${' ;{1} ;[2]}
 expect: []
 $;{+ 1 $missing} and $;[# disabled {error "x"}] produce nothing, even with active-looking text inside.
-$[# ~ {^ {x} {* x 10}}]
+$[# {~ x} {* x 10}]
 ${~ 3}
 expect: 30
 ${~{+ 1 2}}

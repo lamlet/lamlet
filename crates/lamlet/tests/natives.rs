@@ -86,20 +86,20 @@ $[Import std]
 
 $[NativeType Tree "host.garden/tree"]
 
-$[Native seconds [% {std::Fn {'} std::Float}] "host.clock/seconds" Runtime]
+$[Native seconds {std::Fn {'} std::Float} "host.clock/seconds" Runtime]
 
 Fn([String], Int). Leaves on a named tree;
 counting costs $$1.
-$[Native leaves [% {std::Fn {' std::String} std::Int}] "host.counts/leaves" Pure]
+$[Native leaves {std::Fn {' std::String} std::Int} "host.counts/leaves" Pure]
 
-$[Native summary [% {std::Fn {' {std::List std::Int} {std::Variant {' {std::Field "none" std::Unit} {std::Field "some" std::String}}}} {std::Struct {' {std::Field "first" std::Int} {std::Field "second" std::Bool}}}}] "host.counts/summary" Pure]
+$[Native summary {std::Fn {' {std::List std::Int} {std::Variant {' {std::Field "none" std::Unit} {std::Field "some" std::String}}}} {std::Struct {' {std::Field "first" std::Int} {std::Field "second" std::Bool}}}} "host.counts/summary" Pure]
 
-$[Native describe [% {std::Fn {' Tree} std::String}] "host.garden/describe" Runtime]
+$[Native describe {std::Fn {' Tree} std::String} "host.garden/describe" Runtime]
 
 Fn([String, Float], Tree). Plants a tree.
-$[Native plant [% {std::Fn {' std::String std::Float} Tree}] "host.garden/plant" Runtime]
+$[Native plant {std::Fn {' std::String std::Float} Tree} "host.garden/plant" Runtime]
 
-$[Native secret [% {std::Fn {'} std::String}] "host.vault/secret" Runtime]
+$[Native secret {std::Fn {'} std::String} "host.vault/secret" Runtime]
 "#
     );
     // A prefix selects part of the registry.

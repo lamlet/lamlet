@@ -1,12 +1,12 @@
 Each binding doubles the nesting of the previous one's type, so `f7` is 129 levels deep: past the type nesting
 limit of 100.
 $[Import* std]
-$[# f0 {^ {x} {' x}}]
-$[# f1 {^ {x} {f0 {f0 x}}}]
-$[# f2 {^ {x} {f1 {f1 x}}}]
-$[# f3 {^ {x} {f2 {f2 x}}}]
-$[# f4 {^ {x} {f3 {f3 x}}}]
-$[# f5 {^ {x} {f4 {f4 x}}}]
-$[# f6 {^ {x} {f5 {f5 x}}}]
-$[# f7 {^ {x} {f6 {f6 x}}}]
+$[# {f0 x} {' x}]
+$[# {f1 x} {f0 {f0 x}}]
+$[# {f2 x} {f1 {f1 x}}]
+$[# {f3 x} {f2 {f2 x}}]
+$[# {f4 x} {f3 {f3 x}}]
+$[# {f5 x} {f4 {f4 x}}]
+$[# {f6 x} {f5 {f5 x}}]
+$[# {f7 x} {f6 {f6 x}}]
 expect-error: limit: type nesting limit (100 levels) exceeded

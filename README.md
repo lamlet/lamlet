@@ -32,7 +32,7 @@ of document are extensions in their own repositories, such as `lamlet-present` f
 
 ```text
 $[Import* std]
-$[# square {^ {x} {* x x}}]
+$[# {square x} {* x x}]
 $[f "The square of 6 is ${square 6}."]
 ```
 
@@ -46,9 +46,9 @@ is an ordinary value with an ordinary type, so wrapping or passing a primitive n
 ```sh
 cargo build --release
 ./target/release/lamlet examples/hello.lam           # run it: the text, with each region's value filled in
-./target/release/lamlet build page.lam -o page.md    # compile to Markdown, HTML, JSON, or speech (docs/documents.md)
+./target/release/lamlet build page.lam -o page.md    # compile to Markdown, HTML, or JSON (docs/documents.md)
 ./target/release/lamlet eval examples/hello.lam      # JSON results on stdout
-./target/release/lamlet prepare examples/hello.lam   # text, prepared values, and residual runtime regions
+./target/release/lamlet build examples/hello.lam --to ir --prepared   # the IR before evaluation: static values, runtime holes
 ./target/release/lamlet check examples/hello.lam     # types and stages without running runtime code
 cargo test                                           # unit, semantic, fixture, and CLI tests
 ```

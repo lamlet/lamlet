@@ -1,7 +1,7 @@
 Introduction to Programming Languages: executable companion.
 Read docs/programming-languages-course.md alongside this document.
 Run from the repository root:
-cargo run -q -p lamlet --example run -- examples/language-theory.lam
+cargo run -q -p lamlet-cli -- examples/language-theory.lam
 
 $[Import* std]
 
@@ -21,7 +21,7 @@ ${3.neg}
 The base parameter of the caller does not replace addBase's captured base.
 expect: 15
 $[# base 10]
-$[# addBase {^ {x} {+ base x}}]
+$[# {addBase x} {+ base x}]
 ${{^ {base} {addBase 5}} 100}
 
 4. A lambda delays its body. The conditional macro uses this property.
@@ -36,7 +36,7 @@ ${: {+ 1 2} Int}
 
 6. A let-bound function can be instantiated at different types.
 expect: 7
-$[# identity {^ {x} x}]
+$[# {identity x} x]
 ${identity 7}
 expect: true
 ${identity true}
@@ -46,12 +46,10 @@ expect: "Ada"
 $[# person {. name "Ada" age 36}]
 ${.name person}
 expect: "value 7"
-$[# describe {^ {option}
-    {match option {.
+$[# {describe option} {match option {.
         none {^ {ignored} "missing"}
         some {^ {value} [f "value $value"]}
-    }}
-}]
+    }}]
 ${describe {#some 7}}
 expect: "missing"
 ${describe {#none unit}}
@@ -82,7 +80,7 @@ $squares
 
 11. A closure can outlive the function call that created it.
 expect: 12
-$[# makeAdder {^ {amount} {^ {x} {+ amount x}}}]
+$[# {makeAdder amount} {^ {x} {+ amount x}}]
 $[# addFive {makeAdder 5}]
 ${addFive 7}
 

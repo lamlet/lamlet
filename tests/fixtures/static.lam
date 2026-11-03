@@ -11,7 +11,7 @@ $tbl ${!assert {length tbl} 3}
 expect: [1, 4, 9]
 expect: 3
 $[# lit 5]
-$[# g {^ {} lit}]
+$[# {g} lit]
 $[% {+ lit 1}] $[% {g}]
 expect: 6
 expect: 5

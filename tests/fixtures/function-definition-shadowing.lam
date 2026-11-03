@@ -1,6 +1,6 @@
 $[Import* std]
 Where a local definition shadows an outer `g`, the two forms differ (spec §2.4). The outer `g`:
-$[# g {^ {x} 10}]
+$[# {g x} 10]
 The plain form's expression cannot see the binding it makes, so it wraps the outer `g`.
 ${{^ {y} [# g {^ {x} {+ {g x} 1}}] {g y}} 1}
 expect: 11

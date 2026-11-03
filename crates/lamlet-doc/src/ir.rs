@@ -63,9 +63,9 @@ pub enum Inline {
     Span { name: String, attrs: Attrs, inlines: Vec<Inline> },
     /// Shown as `shown`, spoken as `spoken`.
     Say { shown: Vec<Inline>, spoken: String },
-    /// A named point between words, for a speech host. Writers other than speech write nothing.
+    /// A named point between words, for a speech host. Lamlet's backends write nothing for it.
     Anchor { name: String, attrs: Attrs, at: Option<Location> },
-    /// Silence, in seconds. Writers other than speech write nothing.
+    /// Silence, in seconds. Lamlet's backends write nothing for it.
     Pause { seconds: f64, at: Option<Location> },
 }
 

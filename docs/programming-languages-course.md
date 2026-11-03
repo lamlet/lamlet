@@ -12,7 +12,8 @@ The [executable companion](../examples/language-theory.lam) has one section for 
 repository root, run:
 
 ```sh
-cargo run -q -p lamlet --example run -- examples/language-theory.lam
+cargo run -q -p lamlet-cli -- examples/language-theory.lam        # the document, each region's value filled in
+cargo run -q -p lamlet-cli -- eval examples/language-theory.lam   # each region's value and type, as JSON
 ```
 
 For inferred types and stage information, run:

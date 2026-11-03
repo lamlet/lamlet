@@ -1,7 +1,7 @@
 A small Lamlet document. Everything outside dollar regions is prose.
 
 $[Import* std]
-$[# square {^ {x} {* x x}}]
+$[# {square x} {* x x}]
 $[# AGE [% 21]]
 
 The square of 6 is ${square 6}. I am $[% AGE] years old, so I am

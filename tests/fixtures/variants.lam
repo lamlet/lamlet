@@ -1,12 +1,12 @@
 Variants: #label constructors, match with a record of handlers, options and pairs from std.
 $[Import* std]
-$[# area {^ {s} {match s {. circle {^ {r} {* 3.0 {* r r}}} rect {^ {wh} {* {.w wh} {.h wh}}}}}}]
+$[# {area s} {match s {. circle {^ {r} {* 3.0 {* r r}}} rect {^ {wh} {* {.w wh} {.h wh}}}}}]
 ${area {#circle 1.0}} ${area {#rect {. w 2.0 h 3.0}}}
 expect: 3.0
 expect: 6.0
 ${map {' {#circle 2.0} {#rect {. w 1.0 h 1.0}}} area}
 expect: [12.0, 1.0]
-${= {#a 1} {#a 1}} ${= {: {#a 1} [% {Variant {' {Field "a" Int} {Field "b" Int}}}]} {#b 1}}
+${= {#a 1} {#a 1}} ${= {: {#a 1} {Variant {' {Field "a" Int} {Field "b" Int}}}} {#b 1}}
 expect: true
 expect: false
 ${#tag 3} ${#unit K::unit}
@@ -18,7 +18,7 @@ expect: 4
 expect: 0
 expect: "1"
 A wrapper around match keeps its constrained type:
-$[# dispatch {^ {v h} {match v h}}]
+$[# {dispatch v h} {match v h}]
 ${dispatch {#left 3} {. left {^ {x} {+ x 1}} right {^ {s} 0}}}
 expect: 4
 Pairs are records:

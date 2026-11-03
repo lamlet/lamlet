@@ -5,7 +5,7 @@ Prose like this paragraph is ignored by Lamlet.
 $[Import* std]
 
 Functions, exact arity, explicit currying, first-class operators.
-$[# square {^ {x} {* x x}}]
+$[# {square x} {* x x}]
 $[# {adder n} {^ {x} {+ x n}}]
 ${square 7} ${{adder 10} 5} ${map {' 1 2 3} {adder 1}} ${fold {' 1 2 3 4} 0 +}
 expect: 49
@@ -28,8 +28,8 @@ expect: 5000050000
 
 Records: literal, getter, setter, row-polymorphic access.
 $[# p {. name "Ada" age 36}]
-$[# older {^ {r} {.age= r {+ {.age r} 1}}}]
-$[# ageOf {^ {r} {.age r}}]
+$[# {older r} {.age= r {+ {.age r} 1}}]
+$[# {ageOf r} {.age r}]
 ${.name p} ${older p} ${ageOf p} ${ageOf {. age 3 other true}}
 expect: "Ada"
 expect: {age: 37, name: "Ada"}
@@ -37,7 +37,7 @@ expect: 36
 expect: 3
 
 Variants: #tag to build, match with a record of handlers (one per alternative), or !case with one clause each.
-$[# area {^ {s} {match s {. circle {^ {r} {* 3.0 {* r r}}} rect {^ {wh} {* {.w wh} {.h wh}}}}}}]
+$[# {area s} {match s {. circle {^ {r} {* 3.0 {* r r}}} rect {^ {wh} {* {.w wh} {.h wh}}}}}]
 $[# {perimeter s} {!case s {circle r {* 6.0 r}} {rect wh {* 2.0 {+ {.w wh} {.h wh}}}}}]
 ${area {#circle 1.0}} ${area {#rect {. w 2.0 h 3.0}}} ${#hello 1} ${perimeter {#rect {. w 2.0 h 3.0}}}
 expect: 3.0
@@ -89,20 +89,20 @@ expect: 5
 expect: <none: Unit, some: Int>
 
 Objects: records whose fields hold functions; instances from a prototype share the closure.
-$[# _greet {^ {self} [f "Hi, I am ${.name self}."]}]
+$[# {_greet self} [f "Hi, I am ${.name self}."]]
 $[# Animal {. name "nobody" greet _greet}]
 $[# rex {.name= Animal "Rex"}]
 ${{.greet rex} rex}
 expect: "Hi, I am Rex."
 
 State transitions are pure functions; a fold over events replays them deterministically.
-$[# update {^ {state event} {match event {. inc {^ {n} {.count= state {+ {.count state} n}}} reset {^ {u} {.count= state 0}}}}}]
+$[# {update state event} {match event {. inc {^ {n} {.count= state {+ {.count state} n}}} reset {^ {u} {.count= state 0}}}}]
 ${fold {' {#inc 2} {#inc 3} {#reset unit} {#inc 1}} {. count 0} update}
 expect: {count: 1}
 
 Animation as a function of time (sampled by a host).
-$[# ease {^ {t} {- 0.5 {* 0.5 {cos {* pi {clamp t 0.0 1.0}}}}}}]
-$[# tween {^ {a b secs} {^ {t} {lerp a b {ease {/ t secs}}}}}]
+$[# {ease t} {- 0.5 {* 0.5 {cos {* pi {clamp t 0.0 1.0}}}}}]
+$[# {tween a b secs} {^ {t} {lerp a b {ease {/ t secs}}}}]
 Floats are binary64: results are bit-identical on every platform, but not "nice"; format for display.
 ${map {' 0.0 1.0 2.0} {tween 0.0 10.0 2.0}} ${fixed {{tween 0.0 10.0 2.0} 1.0} 1}
 expect: [0.0, 4.999999999999999, 10.0]

@@ -1,6 +1,6 @@
 # Lamlet language specification
 
-This is the normative description of Lamlet, language version 0.1.0, as implemented by the interpreter in
+This is the normative description of Lamlet, language version 0.2.0, as implemented by the interpreter in
 `crates/lamlet`. Anything marked **(future)** is not implemented. Supporting documents:
 
 - [quick-start.md](quick-start.md): a tutorial

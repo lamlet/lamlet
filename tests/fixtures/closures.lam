@@ -2,7 +2,7 @@ Closures, explicit currying, shadowing, recursion, and zero-argument functions.
 $[Import* std]
 ${{{^ {a} {^ {b} {- a b}}} 10} 3}
 expect: 7
-$[# adder {^ {n} {^ {x} {+ x n}}}]
+$[# {adder n} {^ {x} {+ x n}}]
 $[# add5 {adder 5}]
 ${add5 1} ${map {' 1 2} {adder 10}} ${{compose {adder 1} {adder 2}} 0}
 expect: 6
@@ -16,12 +16,12 @@ ${{^ {map} map} 4}
 expect: 4
 ${{^ {x} {{^ {x} {* x 10}} {+ x 1}}} 1}
 expect: 20
-$[# k {^ {} 42}]
+$[# {k} 42]
 ${k} ${{const k 0}} ${{^ {} {{^ {} 1}}}}
 expect: 42
 expect: 42
 expect: 1
-$[# fib {^ fib {n} {!if {< n 2} n {+ {fib {- n 1}} {fib {- n 2}}}}}]
+$[# {fib n} {!if {< n 2} n {+ {fib {- n 1}} {fib {- n 2}}}}]
 ${fib 20}
 expect: 6765
 $[# count {^ loop {n acc} {!if {= n 0} acc {loop {- n 1} {+ acc 1}}}}]

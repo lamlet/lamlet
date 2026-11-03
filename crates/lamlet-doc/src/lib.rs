@@ -1,11 +1,11 @@
-//! Lamlet documents as a format-neutral IR, and backends from it to output formats (`plans/formats.md`).
+//! Lamlet documents as a format-neutral IR, and backends from it to output formats (`docs/documents.md`).
 //!
 //! The pipeline, in compiler terms:
 //!
 //! ```text
 //! frontend   (the lamlet crate)  parse, type-check, evaluate: parts with values (Document::parts)
 //! lowering   (lower, prose)      parts to the document IR (Doc); a pure function of the values
-//! backends   (backend::*)        IR to text | Markdown | HTML | JSON | speech
+//! backends   (backend::*)        IR to text | Markdown | HTML | JSON
 //! ```
 //!
 //! There is no optimizer between lowering and the backends. The frontend's static preparation (constant
@@ -17,8 +17,8 @@
 //!   that format is [`COMMONMARK`] ([`prose`]).
 //! - The `content` package ([`CONTENT_SOURCE`]) gives documents portable content: emphasis, links, images,
 //!   tables, code, headings, and speech cues.
-//! - Backends ([`backend`]): `text`, `markdown`, `html`, `json` (the IR itself), and `speech`. Extensions
-//!   (such as `lamlet-present`) build their own on the IR.
+//! - Backends ([`backend`]): `text`, `markdown`, `html`, and `json` (the IR itself). Extensions build their
+//!   own on the IR: `lamlet-present` speaks documents, using the IR's `Say`, `Anchor`, and `Pause` nodes.
 //!
 //! `lamlet FILE` is the text backend with prose as plain text. The crate depends only on `lamlet`.
 

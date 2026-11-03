@@ -587,6 +587,35 @@ fn time_function() {
     assert!(Instance::new(doc.program.clone(), Rc::new(NativeRegistry::empty())).is_err());
 }
 
+/// A checked document's parts in source order, as a host sees them: text (with its span), comments,
+/// declarations, and expression regions with their prepared value (`None` when evaluated at runtime).
+#[derive(Debug)]
+enum Part<'a> {
+    Text(&'a str, lamlet::source::Span),
+    Comment(&'a str),
+    Declaration,
+    Region(Option<&'a Value>),
+}
+
+fn parts(doc: &Document) -> Vec<Part<'_>> {
+    let mut regions = doc.regions.iter();
+    doc.segments
+        .iter()
+        .map(|seg| match seg {
+            lamlet::source::Segment::Text { span, text } => Part::Text(text, *span),
+            lamlet::source::Segment::Comment { text, .. } => Part::Comment(text),
+            lamlet::source::Segment::Region { .. } => {
+                let r = regions.next().expect("region info");
+                if r.is_declaration {
+                    Part::Declaration
+                } else {
+                    Part::Region(r.static_value.as_ref())
+                }
+            }
+        })
+        .collect()
+}
+
 // ---------------------------------------------------------------------------------------------------------
 // Document source convention
 
@@ -596,16 +625,16 @@ fn document_convention() {
     assert_eq!(eval(src), vec!["21", "\" eligible to drink.\""]);
     let stat = "$[Import* std]\n$[# AGE [% 21]]\nI am $[% AGE] years old.\nI am$[% {!if {>= AGE 21} \" eligible.\" \" not eligible.\"}]";
     let doc = check(stat).unwrap();
-    let prepared = doc.prepared();
+    let prepared = parts(&doc);
     let values: Vec<String> = prepared
         .iter()
         .filter_map(|p| match p {
-            PreparedSpan::Value { value, .. } => Some(display(value)),
+            Part::Region(Some(value)) => Some(display(value)),
             _ => None,
         })
         .collect();
     assert_eq!(values, vec!["21", "\" eligible.\""]);
-    assert!(prepared.iter().any(|p| matches!(p, PreparedSpan::Text { text, .. } if text.contains("years old."))));
+    assert!(prepared.iter().any(|p| matches!(p, Part::Text(text, _) if text.contains("years old."))));
 }
 
 #[test]
@@ -613,8 +642,8 @@ fn escapes_and_comments() {
     let src = "$[Import* std]\nThe example $${+ 1 2} is literal. $$[Import std] too. Unprefixed {+ 1 2} and [# x 3]. Costs $50 or $ {q}.\n```\n${+ 1 2}\n```";
     assert_eq!(eval(src), vec!["3"]);
     let doc = check(src).unwrap();
-    match &doc.prepared()[1] {
-        PreparedSpan::Text { text, .. } => assert!(text.contains("The example ${+ 1 2} is literal. $[Import std] too.")),
+    match &parts(&doc)[1] {
+        Part::Text(text, _) => assert!(text.contains("The example ${+ 1 2} is literal. $[Import std] too.")),
         _ => panic!(),
     }
 }
@@ -914,9 +943,9 @@ fn prose_only_and_empty_documents() {
         assert!(inst.evaluate(HostContext::default(), Limits::default()).unwrap().is_empty());
     }
     let doc = check("a $$ b").unwrap();
-    match &doc.prepared()[0] {
-        PreparedSpan::Text { text, span } => {
-            assert_eq!(text, "a $ b");
+    match &parts(&doc)[0] {
+        Part::Text(text, span) => {
+            assert_eq!(*text, "a $ b");
             assert_eq!((span.start, span.end), (0, 6));
         }
         _ => panic!(),
@@ -978,7 +1007,7 @@ fn doc_comments() {
     assert!(!doc.docs.contains_key("plain") && !doc.docs.contains_key("cont"));
     let sq = doc.regions.iter().find(|r| r.declares.as_deref() == Some("square")).unwrap();
     assert!(sq.is_declaration && sq.doc.as_deref().unwrap().starts_with("Squares"));
-    assert!(doc.prepared().iter().any(|p| matches!(p, PreparedSpan::Comment { text, .. } if text == "Doubles its input.")));
+    assert!(parts(&doc).iter().any(|p| matches!(p, Part::Comment(text) if *text == "Doubles its input.")));
     let mut inst = Instance::new(doc.program.clone(), Rc::new(registry())).unwrap();
     let out = inst.evaluate(HostContext::default(), Limits::default()).unwrap();
     assert_eq!(format!("{:?}", out.iter().map(|x| &x.1).collect::<Vec<_>>()), "[1, 2]");

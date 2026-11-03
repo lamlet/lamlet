@@ -1,8 +1,7 @@
 # Building documents
 
 A Lamlet file is a document: text with computed regions. `lamlet FILE` runs it and prints the result, and
-`lamlet build` compiles it to Markdown, HTML, plain text, JSON, or speech. This guide covers both. The design is
-in [plans/formats.md](../plans/formats.md).
+`lamlet build` compiles it to Markdown, HTML, plain text, or JSON. This guide covers both.
 
 ## 1. The pipeline
 
@@ -12,7 +11,7 @@ In compiler terms:
 |---|---|---|
 | Frontend | the `lamlet` crate | Parses, type-checks, and evaluates the regions |
 | Lowering | `lamlet_doc::lower`, `lamlet_doc::prose` | Turns the document and its values into the document IR |
-| Backends | `lamlet_doc::backend::{text, markdown, html, json, speech}` | Turn the IR into one output format each |
+| Backends | `lamlet_doc::backend::{text, markdown, html, json}` | Turn the IR into one output format each |
 
 The IR is a small tree of blocks (paragraphs, headings, lists, tables, code blocks) and inlines (text,
 emphasis, links, images, code, formulas). Lowering only reads values, and backends only read the IR, so the same
@@ -36,7 +35,7 @@ removed. Strings and numbers print as they are; other values print in Lamlet's w
 (`[1, 2]`, `{x: 1.0, y: 2.5}`, `#some(3)`). To print a value of your own type differently, write a function for it:
 
 ```text
-$[# showPoint {^ {p} [f "(${.x p}, ${.y p})"]}]
+$[# {showPoint p} [f "(${.x p}, ${.y p})"]]
 ```
 
 ## 3. `lamlet build`
@@ -45,7 +44,6 @@ $[# showPoint {^ {p} [f "(${.x p}, ${.y p})"]}]
 lamlet build page.lam -o page.md                         # the format from the extension
 lamlet build page.lam --to html --standalone > page.html
 lamlet build page.lam --to ir                            # the IR as JSON
-lamlet build page.lam --to speech                        # utterances for a speech host
 ```
 
 | `--to` | Extension of `-o` | Output |
@@ -54,7 +52,6 @@ lamlet build page.lam --to speech                        # utterances for a spee
 | `md` | `.md` | CommonMark, with GitHub tables |
 | `html` | `.html` | An HTML fragment, or a page with `--standalone` |
 | `ir` | `.json` | The IR: `{"lamletDoc": 1, "blocks": [...]}` |
-| `speech` | | Utterances: `{"lamletSpeech": 1, "utterances": [...]}` |
 
 ### Prose
 
@@ -123,35 +120,26 @@ list of events (`#open`, `#close`, `#text`, `#leaf`), because Lamlet has no recu
 `lamlet-doc` builds the tree and reports an element opened and never closed, a block inside emphasis, or a table
 row with the wrong number of cells, at the region's line.
 
-## 5. Speech
+## 5. Speech nodes
 
-`--to speech` gives one utterance per paragraph, with what is spoken, what is shown, and where cues fall:
+Three kinds of content describe how a document is spoken. They are part of the document, so every backend
+knows what to do with them, but only a speech host (such as the extension `lamlet-present`, section 6) uses
+them fully:
+
+| Content | IR node | Lamlet's backends | A speech host |
+|---|---|---|---|
+| `say shown spoken` | `Say` | write what is shown | speaks `spoken`, shows `shown` |
+| `anchor name attrs` | `Anchor` | write nothing | times a cue to the next spoken word |
+| `pause seconds` | `Pause` | write nothing | adds silence |
 
 ```text
 $[Import* std]$[Import* content]
-# Light {#light}
-
 The room is lit ${anchor "lamp" {' {attr "intensity" "6"}}}by one lamp${pause 0.5}.
-
 The falloff is ${say {math "1/d^2"} "one over d squared"}.
 ```
 
-```json
-{"section": ["light"], "spoken": "The room is lit by one lamp.",
- "pieces": ["The room is lit", "by one lamp", "."],
- "anchors": [{"piece": 1, "kind": "point", "name": "lamp", "attrs": {"intensity": "6"}},
-             {"piece": 2, "kind": "pause", "seconds": 0.5}],
- "shown": "The room is lit by one lamp.", "at": {...}}
-```
-
-- **Pieces.** The spoken text is cut at every anchor, span edge, and pause. An anchor's `piece` is the piece it
-  stands before, so a host times it to that piece's first word. The backend does not count words, because
-  that depends on how the voice splits them.
-- **`say shown spoken`** is shown one way and spoken another. A formula must be inside `say`: a voice cannot read
-  TeX, and the backend reports a bare formula as an error.
-- **Sections** are the ids of the enclosing headings (or their text, when they have no id).
-- **Translations.** `lamlet build zh.lam --to speech --align en.lam` checks that the translation has the same
-  sections, the same number of paragraphs in each, and no anchors or spans (the cues belong to the original).
+A formula meant to be spoken belongs inside `say`, since a voice cannot read TeX. A `span` (section 4) marks a
+stretch of words the same way an anchor marks a point.
 
 ## 6. Extensions
 
@@ -171,8 +159,9 @@ write them out for other tools (`lamlet present source > present.lam`, then `lam
 present=present.lam`).
 
 `lamlet-present` is the extension for narrated presentations: a document whose headings are sections and whose
-paragraphs are sentences, timed from measured speech, with cues, animation curves, and slides. It builds on the
-speech backend (section 5).
+paragraphs are sentences, timed from measured speech, with cues, animation curves, and slides. It reads the
+speech nodes of section 5: `lamlet present speech` lists every sentence with its spoken text, pieces, and cues, and
+checks that a translation lines up with its original (`--align`).
 
 ## 7. The prepared IR
 
@@ -196,3 +185,10 @@ let md = markdown::write(&ir)?;
 
 A host with a format of its own walks `lamlet_doc::Doc` (or reads the JSON form) and writes it, as the backends
 in `crates/lamlet-doc/src/backend/` do.
+
+## 9. Not yet available
+
+- A LaTeX backend. The IR already has what it needs (formulas, code, tables); text, Markdown, and HTML came
+  first to show the IR is enough.
+- The rest of CommonMark in parsed prose: block quotes, thematic breaks, setext headings, HTML, reference links,
+  and indented code blocks are written as text (section 3).

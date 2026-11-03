@@ -401,4 +401,4 @@ Eq A: Fn([A], Int). A stable hash: equal values hash equally on every platform a
 $[# hash K::hash]
 
 Fn([], Int), Runtime. The Unix time (seconds) that the host supplies for this evaluation; constant within it.
-$[Native time [% {Fn {'} Int}] "std.time/now" Runtime]
+$[Native time {Fn {'} Int} "std.time/now" Runtime]

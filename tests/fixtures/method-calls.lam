@@ -17,13 +17,13 @@ ${append xs xs.reverse} ${xs.std::length}
 expect: [1, 2, 3, 3, 2, 1]
 expect: 3
 Whitespace matters: `{r .x}` applies r to the getter `.x`; `{.x r}` reads the field.
-$[# twice {^ {f} {^ {r} {* 2 {f r}}}}]
+$[# {twice f} {^ {r} {* 2 {f r}}}]
 ${{twice .x} {. x 21}} ${.x {. x 1}}
 expect: 42
 expect: 1
 Objects are records; methods are fields holding functions. Instances made from a prototype share one closure:
 `.name=` copies only the record's field table (values are shared, never deep-copied).
-$[# _greet {^ {self} [f "Hi, I am ${.name self}."]}]
+$[# {_greet self} [f "Hi, I am ${.name self}."]]
 $[# Person {. name "nobody" greet _greet}]
 $[# ada {.name= Person "Ada"}]
 ${{.greet ada} ada} ${{.greet Person} Person}

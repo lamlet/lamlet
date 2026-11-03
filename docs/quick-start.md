@@ -12,10 +12,9 @@ variants, explicit compile-time evaluation, and hygienic macros, embedded in ord
 ```sh
 cargo build --release
 ./target/release/lamlet file.lam          # run it: print the text, each region replaced by its value
-./target/release/lamlet build file.lam -o file.md   # compile to Markdown, HTML, JSON, or speech (documents.md)
+./target/release/lamlet build file.lam -o file.md   # compile to Markdown, HTML, or JSON (documents.md)
 ./target/release/lamlet eval file.lam     # check, then evaluate; JSON results on stdout
 ./target/release/lamlet check file.lam    # types and stages only
-cargo run -q -p lamlet --example run -- file.lam   # plain one-line-per-result output
 ```
 
 A Lamlet file is a **document**. Only `$`-prefixed regions are code; everything else is text, printed as
@@ -44,12 +43,14 @@ Application is written in braces, function first. There are no infix operators: 
 
 ```text
 ${+ 1 2}                          ;; 3
-$[# square {^ {x} {* x x}}]       ;; [# name value] binds a name; {^ {params} body} is a lambda ({λ ...} too)
+${{^ {x} {* x x}} 7}              ;; 49: {^ {params} body} is a lambda ({λ ...} too)
+$[# {square x} {* x x}]           ;; [# {name params} body] defines a function
 ${square 7}                       ;; 49
 ${{^ {} 42}}                      ;; a zero-argument function, called with {f}
 ```
 
-Defining a named function is common enough to have a shorter form: put the call shape where the name goes.
+A function definition puts the call shape where the name goes. It binds the name to a lambda that may call
+itself:
 
 ```text
 $[# {cube x} {* x {square x}}]    ;; the same as [# cube {^ cube {x} {* x {square x}}}]
@@ -61,7 +62,7 @@ Lambdas have an **exact arity**. There is no automatic currying or partial appli
 error ("expects 2 arguments, but 1 were given"). Curry explicitly by returning a lambda:
 
 ```text
-$[# adder {^ {n} {^ {x} {+ x n}}}]
+$[# {adder n} {^ {x} {+ x n}}]
 ${{adder 10} 5}                   ;; 15
 ${map {' 1 2 3} {adder 1}}        ;; [2, 3, 4]
 ${fold {' 1 2 3 4} 0 +}           ;; 10, and + is first-class
@@ -170,8 +171,8 @@ Field access is row-polymorphic: `{^ {r} {.age r}}` accepts any record that has 
 handler per alternative:
 
 ```text
-$[# area {^ {s} {match s {. circle {^ {r} {* 3.14 {* r r}}}
-                            rect   {^ {wh} {* {.w wh} {.h wh}}}}}}]
+$[# {area s} {match s {. circle {^ {r} {* 3.14 {* r r}}}
+                          rect   {^ {wh} {* {.w wh} {.h wh}}}}}]
 ${area {#circle 1.0}}             ;; 3.14
 ${area {#rect {. w 2.0 h 3.0}}}   ;; 6.0
 ```
@@ -180,8 +181,8 @@ The handlers determine the variant type, and they must cover it exactly; a missi
 error. The std macro `!case` writes the same thing with one clause per alternative, each naming its payload:
 
 ```text
-$[# area {^ {s} {!case s {circle r {* 3.14 {* r r}}}
-                         {rect wh {* {.w wh} {.h wh}}}}}]
+$[# {area s} {!case s {circle r {* 3.14 {* r r}}}
+                       {rect wh {* {.w wh} {.h wh}}}}]
 ```
 
 Options and pairs are not built in. They are ordinary definitions in std, made from these two forms:
@@ -215,7 +216,7 @@ every type and wrapping it in a lambda changes nothing. Keep these distinctions 
   so they share one closure:
 
 ```text
-$[# _greet {^ {self} [f "Hi, I am ${.name self}."]}]
+$[# {_greet self} [f "Hi, I am ${.name self}."]]
 $[# Person {. name "nobody" greet _greet}]
 $[# ada {.name= Person "Ada"}]
 ${{.greet ada} ada}                  ;; "Hi, I am Ada."

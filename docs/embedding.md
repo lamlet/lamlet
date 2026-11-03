@@ -237,7 +237,7 @@ still prints the panic message to stderr.)
 give each worker thread its own engine, built by one shared function. Send results back as plain values:
 rendered `String`s, `Data`, or your own types. `host_threads.rs` shows this.
 
-Sharing one checked document between threads is planned (phase 2 of `plans/embedding.md`).
+Sharing one checked document between threads is not yet available (section 10).
 
 ## 9. Untrusted documents
 
@@ -254,7 +254,6 @@ thread.
 
 ## 10. Not yet available
 
-- Sharing documents between threads, and storing compiled documents so they need no rechecking (phases 2 and
-  5).
-- More than one diagnostic per check, and stable error codes (phase 4).
+- Sharing documents between threads, and storing compiled documents so they need no rechecking.
+- More than one diagnostic per check, and stable error codes.
 - JSON conversion in the library. The CLI's JSON encoding is not yet exposed.

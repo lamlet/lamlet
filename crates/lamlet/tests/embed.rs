@@ -319,15 +319,22 @@ fn fixture_resolver() -> MemoryResolver {
 
 /// Everything a host can observe about a checked document, as text.
 fn observe(doc: &lamlet::Document, inputs: &[(String, i64)]) -> Vec<String> {
+    let mut regions = doc.regions.iter();
     let mut out: Vec<String> = doc
-        .prepared()
+        .segments
         .iter()
-        .map(|p| match p {
-            lamlet::PreparedSpan::Text { text, .. } => format!("text {:?}", text),
-            lamlet::PreparedSpan::Comment { text, .. } => format!("comment {:?}", text),
-            lamlet::PreparedSpan::Declaration { region, .. } => format!("declaration {}", region),
-            lamlet::PreparedSpan::Value { region, ty, value, .. } => format!("value {} {} {}", region, ty, display(value)),
-            lamlet::PreparedSpan::Residual { region, ty, .. } => format!("residual {} {}", region, ty),
+        .map(|seg| match seg {
+            lamlet::source::Segment::Text { text, .. } => format!("text {:?}", text),
+            lamlet::source::Segment::Comment { text, .. } => format!("comment {:?}", text),
+            lamlet::source::Segment::Region { .. } => {
+                let r = regions.next().expect("region info");
+                let ty = r.ty.clone().unwrap_or_default();
+                match &r.static_value {
+                    _ if r.is_declaration => format!("declaration {}", r.index),
+                    Some(value) => format!("value {} {} {}", r.index, ty, display(value)),
+                    None => format!("residual {} {}", r.index, ty),
+                }
+            }
         })
         .collect();
     out.push(format!("dependencies {:?}", doc.dependencies));

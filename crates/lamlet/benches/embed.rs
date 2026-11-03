@@ -1,6 +1,6 @@
 //! Benchmarks of the embedding surface, with no dependencies: `cargo bench -p lamlet --bench embed`.
 //!
-//! The workloads are the ones `plans/embedding.md` names: checking a 1,000-line document with 200 regions,
+//! The workloads are a host's typical ones: checking a 1,000-line document with 200 regions,
 //! evaluating and rendering it, 10⁶ calls of a small closure, plus a VM loop.
 //!
 //! `-- --gate` also checks properties that do not depend on the machine, so CI can run it on shared runners:

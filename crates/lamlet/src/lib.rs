@@ -5,7 +5,8 @@
 //!
 //! Conceptual host operations:
 //! - [`check_document`]: source + resolver + native metadata → checked [`Document`] (static regions prepared).
-//! - [`Document::prepared`]: document spans with ignored text, prepared values, and residual runtime regions.
+//! - The checked [`Document`]'s `segments` and `regions`: its text, and each region with its prepared value or none.
+//!   Hosts use [`embed`] (`Document::parts`) instead.
 //! - [`Instance::new`]: verified program + implementation registry → isolated reusable instance.
 //! - [`Instance::initialize`], [`Instance::evaluate`], [`Instance::call`], [`Instance::reset`].
 
@@ -37,7 +38,7 @@ pub use package::{Exports, MemoryResolver, PackageSource, Resolver};
 pub use value::Value;
 pub use vm::{Limits, RuntimeError};
 
-pub const LANGUAGE_VERSION: &str = "0.1.0";
+pub const LANGUAGE_VERSION: &str = "0.2.0";
 
 /// FNV-1a 64-bit hash (stable across platforms and runs).
 pub fn fnv1a(bytes: &[u8]) -> u64 {
@@ -226,50 +227,7 @@ fn check_in(mut s: Session, file: source::SourceFile) -> Result<Document, Failur
     })
 }
 
-/// One span of a prepared document.
-#[derive(Clone, Debug)]
-pub enum PreparedSpan {
-    /// Ignored text (display form: `$$` already unescaped).
-    Text { span: Span, text: String },
-    /// A declaration region (no value).
-    Declaration { region: u32, span: Span },
-    /// A region whose value was fixed during preparation.
-    Value { region: u32, span: Span, ty: String, value: Value, ty_desc: Option<TypeDesc> },
-    /// A region that must be evaluated at runtime.
-    Residual { region: u32, span: Span, ty: String },
-    /// A disabled region (`$;{...}`/`$;[...]`); hosts normally do not display it.
-    Comment { span: Span, text: String },
-}
-
 impl Document {
-    pub fn prepared(&self) -> Vec<PreparedSpan> {
-        let mut out = Vec::new();
-        let mut regions = self.regions.iter();
-        for seg in &self.segments {
-            match seg {
-                Segment::Text { span, text } => out.push(PreparedSpan::Text { span: *span, text: text.clone() }),
-                Segment::Comment { span, text } => out.push(PreparedSpan::Comment { span: *span, text: text.clone() }),
-                Segment::Region { .. } => {
-                    let r = regions.next().expect("region info");
-                    out.push(if r.is_declaration {
-                        PreparedSpan::Declaration { region: r.index, span: r.span }
-                    } else if let Some(v) = &r.static_value {
-                        PreparedSpan::Value {
-                            region: r.index,
-                            span: r.span,
-                            ty: r.ty.clone().unwrap_or_default(),
-                            value: v.clone(),
-                            ty_desc: r.ty_desc.clone(),
-                        }
-                    } else {
-                        PreparedSpan::Residual { region: r.index, span: r.span, ty: r.ty.clone().unwrap_or_default() }
-                    });
-                }
-            }
-        }
-        out
-    }
-
     pub fn static_binding(&self, name: &str) -> Option<&Value> {
         self.static_bindings.iter().find(|b| b.name == name).map(|b| &b.value)
     }
@@ -395,10 +353,3 @@ impl Instance {
     }
 }
 
-/// Convenience: check and evaluate a document with the default resolver and no natives.
-pub fn run_source(source: &str) -> Result<Vec<(u32, Value)>, String> {
-    let natives = Rc::new(NativeRegistry::new());
-    let doc = check_document("<input>", source, MemoryResolver::new().into_rc(), natives.clone(), &Options::default()).map_err(|f| f.render())?;
-    let mut inst = Instance::new(doc.program.clone(), natives).map_err(|d| d.render(&doc.sources))?;
-    inst.evaluate(HostContext::default(), Limits::default()).map_err(|e| e.to_diagnostic().render(&doc.sources))
-}

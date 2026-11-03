@@ -6,12 +6,11 @@
 cargo build --release
 ./target/release/lamlet eval FILE.lam                  # check then evaluate; JSON on stdout
 ./target/release/lamlet check FILE.lam                 # types and stages only
-./target/release/lamlet prepare FILE.lam               # prose, static values, and residual runtime regions
+./target/release/lamlet FILE.lam                       # the document, each region's value filled in
+./target/release/lamlet build FILE.lam --to ir --prepared   # the IR before evaluation: static values, runtime holes
 ./target/release/lamlet call FILE.lam area 3 4         # call a static top-level function with JSON arguments
 ./target/release/lamlet batch REQUEST.json             # several documents/packages in one request
 #   options: --package NAME=PATH   --input KEY=JSON   --require-linked   --max-instructions N
-cargo run -q -p lamlet --example run -- FILE.lam       # quick: one line per result, "[region] value"
-cargo run -q -p lamlet --example docs -- FILE.lam      # list documented names in scope
 ```
 
 JSON encoding of values:
@@ -96,7 +95,7 @@ use lamlet::syntax::Availability;    // Pure | Static | Runtime
 use std::rc::Rc;
 
 let mut resolver = MemoryResolver::new();                 // std is always available
-resolver.add("mylib", "$[Import* std] $[# twice {^ {x} {* 2 x}}]", Exports::All); // `_names` stay private
+resolver.add("mylib", "$[Import* std] $[# {twice x} {* 2 x}]", Exports::All); // `_names` stay private
 
 let mut natives = NativeRegistry::new();                  // includes std.time/now
 natives.register_fn("app.clock/now", vec![], TypeDesc::Float, Availability::Runtime,
@@ -119,8 +118,8 @@ let v = inst.call(&f, vec![Value::Int(21)], ctx, Limits::default())?;           
   number of times, and two instances can share one program. A failed evaluation does not corrupt the next one.
 - **Static bindings.** `doc.static_bindings` gives each binding's name, type string, `ty_desc`, value, and doc.
   Use it to check that a document defines what the host expects.
-- **Prepared output.** `doc.prepared()` gives the prose spans, static values, and residual runtime regions, for
-  rendering a document.
+- **Prepared output.** `lamlet::embed`'s `Document::parts()` gives the prose, comments, declarations, and
+  regions in order, each region with its prepared value (or none, when it is evaluated at runtime).
 - **Constructing values in Rust.** Use `Value::record(vec![(Rc::from("x"), v)])` (fields are sorted
   automatically), `Value::variant("some", v)`, `Value::str("s")`, and
   `Value::List(List::from_vec(...))`.
@@ -129,7 +128,7 @@ let v = inst.call(&f, vec![Value::Int(21)], ctx, Limits::default())?;           
   defaults are in `Limits::default()`; preparation uses `Limits::static_default()`.
 - **Cancellation.** `inst.cancel_flag()` returns an `Arc<AtomicBool>` that stops a running evaluation.
 - **Native contracts.** A native is declared in source as
-  `[Native name [% {Fn {' A B} R}] "api-id" Pure|Static|Runtime]`. The declaration must match the registry
+  `[Native name {Fn {' A B} R} "api-id" Pure|Static|Runtime]`. The declaration must match the registry
   exactly (types and availability). Function-typed native arguments are not supported in v1. Opaque host types
   are declared with `[NativeType T "type-id"]` plus `NativeRegistry::register_type`.
 - **Interface-only checking.** `natives.interface_only()` keeps the metadata without implementations.

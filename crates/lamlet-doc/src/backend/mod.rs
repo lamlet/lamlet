@@ -6,10 +6,8 @@
 //! | [`markdown`] | CommonMark, with GitHub's tables |
 //! | [`html`] | an HTML fragment, or a page |
 //! | [`json`] | the IR itself, as versioned JSON |
-//! | [`speech`] | utterances for a speech host |
 
 pub mod html;
 pub mod json;
 pub mod markdown;
-pub mod speech;
 pub mod text;

@@ -51,7 +51,7 @@ makes them statically available (spec §5).
 | Static evaluation, syntactic stage rule, effect checking | Implemented and tested |
 | Pattern macros with hygiene and budgets | Implemented and tested |
 | Deterministic math, hash | Implemented and tested (bits pinned) |
-| CLI (`check`/`prepare`/`eval`/`call`/`batch`) | Implemented and tested |
+| CLI (`lamlet FILE`, `build`, `check`/`eval`/`call`/`batch`, extensions) | Implemented and tested |
 | Benchmarks (`crates/lamlet/benches/embed.rs`, `cargo bench -p lamlet --bench embed`) | Implemented; CI gates linear scaling and instruction counts |
 | Procedural macros, portable artifacts, multiple diagnostics, mutual recursion, abstract types | Not implemented |
 

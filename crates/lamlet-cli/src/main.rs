@@ -1,4 +1,4 @@
-//! `lamlet` command-line interface: run a document, or check, prepare, eval, and a batch JSON protocol.
+//! `lamlet` command-line interface: run or build a document, or check, eval, call, and a batch JSON protocol.
 //!
 //! `lamlet FILE` (or `lamlet run FILE`) prints the document: its text as written, each region replaced by its
 //! value. The other commands print only a structured JSON response on stdout. Rendered diagnostics go to stderr.
@@ -18,11 +18,10 @@ const PROTOCOL_VERSION: u64 = 1;
 const USAGE: &str = "usage:
   lamlet FILE    [--package NAME=PATH]... [--input KEY=JSON]... [--max-instructions N]
   lamlet run     FILE (the same)
-  lamlet build   FILE [-o OUT] [--to FORMAT] [--prose FORMAT] [--standalone] [--prepared] [--align ORIGINAL]
+  lamlet build   FILE [-o OUT] [--to FORMAT] [--prose FORMAT] [--standalone] [--prepared]
                  [--package NAME=PATH]... [--input KEY=JSON]...
   lamlet NAME    ARGS...   (an extension: runs `lamlet-NAME ARGS...` from the PATH)
   lamlet check   FILE [--package NAME=PATH]... [--require-linked]
-  lamlet prepare FILE [--package NAME=PATH]...
   lamlet eval    FILE [--package NAME=PATH]... [--input KEY=JSON]... [--max-instructions N]
   lamlet call    FILE FUNCTION [JSON_ARG]... [--package NAME=PATH]... [--input KEY=JSON]...
   lamlet batch   < request.json
@@ -31,11 +30,10 @@ const USAGE: &str = "usage:
 replaced by its value, and declarations (`$[# ...]`, imports) removed with their lines.
 
 `build` compiles the document to another format through Lamlet's document IR (lamlet-doc). FORMAT is
-`text`, `md`, `html`, `ir` (the IR as JSON), or `speech` (utterances as JSON); without --to it comes from the
+`text`, `md`, `html`, or `ir` (the IR as JSON); without --to it comes from the
 extension of OUT, and is `text` without either. Prose is copied as markup of the output format, or with
 --prose commonmark parsed as CommonMark (a subset) so one source builds to every format. --standalone makes an
-HTML page; --prepared writes the IR without evaluating (runtime regions are holes); --align checks a
-translation's speech against its ORIGINAL. The `content` package (images, links, tables, ...) is always
+HTML page; --prepared writes the IR without evaluating (runtime regions are holes). The `content` package (images, links, tables, ...) is always
 available.
 
 Extensions: `lamlet NAME ARGS...` runs the program `lamlet-NAME` from the PATH with ARGS, when NAME is not a
@@ -73,7 +71,6 @@ struct Build {
     prose: Option<String>,
     standalone: bool,
     prepared: bool,
-    align: Option<String>,
 }
 
 fn main() {
@@ -96,7 +93,7 @@ fn main() {
     std::process::exit(if ok { 0 } else { 1 });
 }
 
-const COMMANDS: &[&str] = &["run", "build", "check", "prepare", "eval", "call", "batch"];
+const COMMANDS: &[&str] = &["run", "build", "check", "eval", "call", "batch"];
 
 /// `lamlet NAME ARGS...` for an extension: when NAME is not a command or an existing file, run `lamlet-NAME ARGS...`
 /// (the system finds it on the PATH). On Unix it replaces this process; elsewhere it runs and returns its exit
@@ -146,7 +143,7 @@ fn parse_args(args: &[String]) -> Result<Request, String> {
         std::io::stdin().read_to_string(&mut text).map_err(|e| format!("reading stdin: {}", e))?;
         return parse_batch(&text);
     }
-    if !matches!(command.as_str(), "run" | "build" | "check" | "prepare" | "eval" | "call") {
+    if !matches!(command.as_str(), "run" | "build" | "check" | "eval" | "call") {
         return Err(format!("unknown command `{}`", command));
     }
     let mut positional: Vec<String> = Vec::new();
@@ -175,7 +172,6 @@ fn parse_args(args: &[String]) -> Result<Request, String> {
             "-o" | "--out" => req.build.out = Some(value()?),
             "--to" => req.build.to = Some(value()?),
             "--prose" => req.build.prose = Some(value()?),
-            "--align" => req.build.align = Some(value()?),
             "--standalone" => req.build.standalone = true,
             "--prepared" => req.build.prepared = true,
             "--max-instructions" => req.max_instructions = Some(value()?.parse().map_err(|_| "--max-instructions expects an integer")?),
@@ -202,7 +198,7 @@ fn parse_args(args: &[String]) -> Result<Request, String> {
 }
 
 /// Batch request:
-/// `{"version":1, "command":"check|prepare|eval|call",
+/// `{"version":1, "command":"check|eval|call",
 ///   "documents":[{"name":..., "source":..., "calls":[{"function":..., "args":[...]}]}],
 ///   "packages":[{"name":..., "source":..., "exports":["a","b"] | "all"}], "inputs":{"key": json}}`
 fn parse_batch(text: &str) -> Result<Request, String> {
@@ -211,7 +207,7 @@ fn parse_batch(text: &str) -> Result<Request, String> {
         return Err(format!("unsupported request version (this tool speaks version {})", PROTOCOL_VERSION));
     }
     let command = j.get("command").and_then(Json::as_str).ok_or("request needs a command")?.to_string();
-    if !matches!(command.as_str(), "check" | "prepare" | "eval" | "call") {
+    if !matches!(command.as_str(), "check" | "eval" | "call") {
         return Err(format!("unknown command `{}`", command));
     }
     let str_field = |o: &Json, f: &str| o.get(f).and_then(Json::as_str).map(String::from).ok_or(format!("missing string field `{}`", f));
@@ -276,10 +272,10 @@ fn resolver(req: &Request) -> MemoryResolver {
 fn target(b: &Build) -> Result<String, String> {
     if let Some(t) = &b.to {
         return match t.as_str() {
-            "text" | "md" | "html" | "ir" | "speech" => Ok(t.clone()),
+            "text" | "md" | "html" | "ir" => Ok(t.clone()),
             "markdown" => Ok("md".into()),
             "json" => Ok("ir".into()),
-            other => Err(format!("unknown format `{}`: it is text, md, html, ir, or speech", other)),
+            other => Err(format!("unknown format `{}`: it is text, md, html, or ir", other)),
         };
     }
     let Some(out) = &b.out else { return Ok("text".into()) };
@@ -322,7 +318,7 @@ fn build(req: &Request) -> i32 {
         eprintln!("lamlet: {}", m);
         2
     };
-    if req.command == "run" && (b.to.is_some() || b.out.is_some() || b.prose.is_some() || b.standalone || b.prepared || b.align.is_some()) {
+    if req.command == "run" && (b.to.is_some() || b.out.is_some() || b.prose.is_some() || b.standalone || b.prepared) {
         return usage("output options are for `lamlet build`".into());
     }
     let to = match target(b) {
@@ -342,9 +338,6 @@ fn build(req: &Request) -> i32 {
     if b.standalone && to != "html" {
         return usage("--standalone is for --to html".into());
     }
-    if b.align.is_some() && to != "speech" {
-        return usage("--align is for --to speech".into());
-    }
     let result = (|| -> Result<String, lamlet_doc::Error> {
         let ir = lower_file(req, name, source, &prose)?;
         match to.as_str() {
@@ -356,15 +349,6 @@ fn build(req: &Request) -> i32 {
             }
             "html" => backend::html::write(&ir),
             "ir" => backend::json::write(&ir),
-            "speech" => {
-                let utterances = backend::speech::utterances(&ir)?;
-                if let Some(original) = &b.align {
-                    let text = std::fs::read_to_string(original).map_err(|e| lamlet_doc::Error::Doc { message: format!("reading {}: {}", original, e), at: None })?;
-                    let theirs = backend::speech::utterances(&lower_file(req, original, &text, &prose)?)?;
-                    backend::speech::align(&theirs, &utterances)?;
-                }
-                Ok(backend::speech::to_json(&utterances))
-            }
             _ => backend::text::write(&ir),
         }
     })();
@@ -436,23 +420,6 @@ fn run_document(req: &Request, name: &str, source: &str, calls: &[(String, Vec<J
     match req.command.as_str() {
         "check" => {
             out.insert("regions".into(), Json::Array(doc.regions.iter().map(|r| region_json(r, &doc.sources)).collect()));
-        }
-        "prepare" => {
-            let spans: Vec<Json> = doc
-                .prepared()
-                .into_iter()
-                .map(|p| match p {
-                    PreparedSpan::Text { span, text } => json!({"kind": "text", "start": span.start, "end": span.end, "text": text}),
-                    PreparedSpan::Comment { span, text } => json!({"kind": "comment", "start": span.start, "end": span.end, "text": text}),
-                    PreparedSpan::Declaration { region, span } => json!({"kind": "declaration", "region": region, "start": span.start, "end": span.end}),
-                    PreparedSpan::Value { region, span, ty, value, .. } => json!({
-                        "kind": "value", "region": region, "start": span.start, "end": span.end, "type": ty,
-                        "value": value_json(&value),
-                    }),
-                    PreparedSpan::Residual { region, span, ty } => json!({"kind": "residual", "region": region, "start": span.start, "end": span.end, "type": ty}),
-                })
-                .collect();
-            out.insert("spans".into(), Json::Array(spans));
         }
         "eval" | "call" => {
             let mut inst = match Instance::new(doc.program.clone(), natives) {

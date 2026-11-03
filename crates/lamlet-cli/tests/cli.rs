@@ -26,17 +26,22 @@ fn eval_example_matches_library() {
     assert_eq!(code, 0);
     let shown: Vec<String> = j["documents"][0]["results"].as_array().unwrap().iter().map(|r| r["value"]["display"].as_str().unwrap().to_string()).collect();
     let src = std::fs::read_to_string(example()).unwrap();
-    let lib: Vec<String> = lamlet::run_source(&src).unwrap().iter().map(|(_, v)| format!("{:?}", v)).collect();
+    let engine = lamlet::embed::Engine::new();
+    let doc = engine.check(lamlet::embed::SourceFile::new("hello.lam", src)).unwrap();
+    let lib: Vec<String> = engine.instance(&doc).unwrap().evaluate().unwrap().iter().map(|(_, v)| format!("{:?}", v)).collect();
     assert_eq!(shown, lib);
     assert_eq!(shown.last().unwrap(), "\"The total is 9.\"");
 }
 
 #[test]
-fn prepare_reports_static_and_residual_spans() {
-    let (code, j, _) = lamlet(&["prepare", &example()], None);
-    assert_eq!(code, 0);
-    let kinds: Vec<&str> = j["documents"][0]["spans"].as_array().unwrap().iter().map(|s| s["kind"].as_str().unwrap()).collect();
-    assert!(kinds.contains(&"text") && kinds.contains(&"value") && kinds.contains(&"residual") && kinds.contains(&"declaration"));
+fn prepare_is_replaced_by_build() {
+    // `lamlet prepare` became `lamlet build --to ir --prepared`, which gives the same static values and holes.
+    let (code, _, _) = lamlet(&["prepare", &example()], None);
+    assert_eq!(code, 2);
+    let out = Command::new(env!("CARGO_BIN_EXE_lamlet")).args(["build", &example(), "--to", "ir", "--prepared"]).output().unwrap();
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let ir: Json = serde_json::from_slice(&out.stdout).unwrap();
+    assert_eq!(ir["lamletDoc"], 1);
 }
 
 #[test]
@@ -174,8 +179,8 @@ fn build_writes_each_format() {
     let (code, html, _) = run(&["build", file, "--to", "html", "--prose", "commonmark", "--standalone"]);
     assert_eq!(code, 0);
     assert!(html.contains("<title>Rooms</title>") && html.contains("<h1 id=\"rooms\">Rooms</h1>\n<p>Only <em>two</em> rooms &amp; 2 doors.</p>"), "{html}");
-    let (_, speech, _) = run(&["build", file, "--to", "speech", "--prose", "commonmark"]);
-    assert!(speech.contains(r#""section":["rooms"],"spoken":"Only two rooms & 2 doors.""#), "{speech}");
+    // Speech is an extension's job (`lamlet present speech`), not a format of `build`.
+    assert_eq!(run(&["build", file, "--to", "speech"]).0, 2);
     let (_, ir, _) = run(&["build", file, "--to", "ir", "--prepared"]);
     assert!(ir.contains(r#"{"type":"hole""#), "{ir}");
     // Without options, `build` is what `lamlet FILE` prints.

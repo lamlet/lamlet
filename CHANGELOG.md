@@ -4,12 +4,26 @@ All notable changes to this project are listed here. Versions follow [Semantic V
 while the version is `0.x`, a minor release may break the API. The language version (`LANGUAGE_VERSION`) and
 bytecode version (`BYTECODE_VERSION`) are tracked separately from the crate version.
 
-## Unreleased
+## 0.3.0 (2026-11-02)
+
+Language version 0.2.0. Documents written for 0.1.0 keep working, except one that uses `λ` as a name.
+
+### Changed
+
+- `λ` is reserved: it is the other spelling of the lambda head (below), so it can no longer be a binding name.
+- An ascription's type and a native's signature are evaluated at compile time, as if written `[% T]`, so forms
+  that used to be stage errors (`{: xs {List Int}}`) now check.
 
 ### Removed
 
-- `lamlet-present`, the render-lab adapter, moved to its own project. The Lamlet repository keeps general
-  host contracts and synthetic hosts only; `docs/host.md` now holds just the general contract.
+- `lamlet prepare`: `lamlet build FILE --to ir --prepared` gives the same static values and runtime holes, as the
+  document IR.
+- The internal `Document::prepared` and `PreparedSpan`, replaced by `lamlet::embed`'s `Document::parts`, and
+  `lamlet::run_source`, replaced by `Engine` and `Instance::evaluate`.
+- The `run`, `docs`, and `timing` example programs, replaced by `lamlet FILE`, `lamlet check`, and
+  `cargo bench -p lamlet --bench embed`.
+- The speech backend (`lamlet build --to speech`, `--align`): it moved to the `lamlet-present` extension
+  (`lamlet present speech`). lamlet-doc keeps the `Say`, `Anchor`, and `Pause` nodes.
 
 ### Added
 
@@ -18,9 +32,8 @@ bytecode version (`BYTECODE_VERSION`) are tracked separately from the crate vers
 - `lamlet FILE` (also `lamlet run FILE`) runs a document from top to bottom and prints it: its text as written,
   each expression region replaced by its value, and declarations removed with their lines.
 - `lamlet-doc`, a new crate with no dependencies but `lamlet`: documents lowered to a format-neutral IR (`Doc`,
-  `Block`, `Inline`), and backends from it to plain text, Markdown, HTML, JSON (the IR itself), and speech
-  (utterances with anchors between words, and a translation alignment check). `lamlet FILE` goes through it,
-  with the same output as before on every fixture and example (`plans/formats.md`).
+  `Block`, `Inline`), and backends from it to plain text, Markdown, HTML, and JSON (the IR itself). `lamlet FILE` goes through it,
+  with the same output as before on every fixture and example.
 - The `content` package (always available in the CLI, `lamlet_doc::CONTENT_SOURCE` for hosts): emphasis, links,
   images, code, formulas, headings, lists, tables, code blocks, named spans and groups, raw markup, and speech
   cues (`say`, `anchor`, `pause`), as typed values.
@@ -36,14 +49,27 @@ bytecode version (`BYTECODE_VERSION`) are tracked separately from the crate vers
 - `!case`, a std macro for matching variants: `{!case s {circle r {* 3.0 {* r r}}} {rect wh {area wh}}}` is
   `{match s {. circle {^ {r} …} rect {^ {wh} …}}}`. It expands in one step, so the number of clauses does not
   count against the macro expansion depth.
+- std, `content`, the examples, and the docs use function definitions, and generated native declarations no
+  longer wrap their signatures in `[% ...]`.
 - `docs/conventions.md`, the recommended naming conventions: camel case in code, `_` in package names, `-` in
   ids, files, and extension programs.
 - Extensions: `lamlet NAME ARGS...` runs `lamlet-NAME ARGS...` from the PATH when NAME is not a command or a
   file, with the `lamlet` program's path in `LAMLET`. Narrated presentations are the extension `lamlet-present`.
-- `lamlet build FILE [-o OUT] [--to text|md|html|ir|speech]`: the format from `--to` or the extension of `OUT`.
+- `lamlet build FILE [-o OUT] [--to text|md|html|ir]`: the format from `--to` or the extension of `OUT`.
   `--prose commonmark` parses prose as CommonMark (a subset), so one source builds to every format;
-  `--standalone` writes an HTML page, `--prepared` the IR without evaluating, and `--align` checks a translation
-  against its original.
+  `--standalone` writes an HTML page, and `--prepared` the IR without evaluating.
+
+## 0.2.0 (2026-11-01)
+
+Tagged `v0.2.0`; its crates still declared version 0.1.1.
+
+### Removed
+
+- `lamlet-present`, the render-lab adapter, moved to its own project. The Lamlet repository keeps general
+  host contracts and synthetic hosts only; `docs/host.md` now holds just the general contract.
+
+### Added
+
 - `lamlet::embed`, the embedding surface for host programs: `Engine`, `SourceFile` (with a position in a host
   file), `Document::parts`/`render`/`render_with`/`binding`, `Instance` with persistent inputs and typed calls
   (`call_typed`), one `Error` type, `IntoLamlet`/`FromLamlet` conversions, and `Data`, a plain `Send + Sync`
