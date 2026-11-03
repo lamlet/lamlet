@@ -57,6 +57,17 @@ fn golden_everything() {
     }
 }
 
+/// The agent skill's example document (`.agents/skills/lamlet-documents/references/example.lam`) builds to the
+/// Markdown the skill shows beside it.
+#[test]
+fn skill_example_builds_as_shown() {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.agents/skills/lamlet-documents/references");
+    let source = std::fs::read_to_string(dir.join("example.lam")).unwrap();
+    let ir = lower("example.lam", &source, COMMONMARK).unwrap_or_else(|e| panic!("{e}"));
+    let expected = std::fs::read_to_string(dir.join("example.md")).unwrap();
+    assert_eq!(markdown::write(&ir).unwrap().trim_end(), expected.trim_end(), "the skill's example.md is out of date: rebuild it with `lamlet build`");
+}
+
 #[test]
 fn each_inline_in_each_backend() {
     // (snippet, text, markdown, html)

@@ -3,8 +3,9 @@ name: lamlet
 description: >-
   Write, read, debug, and extend Lamlet, the typed functional language embedded in text documents (.lam files;
   this repository's crates/lamlet). Use this skill whenever you work with .lam files, `$[...]`/`${...}` document
-  regions, the Lamlet standard library (crates/lamlet/std/std.lam), the K primitives, Lamlet macros, the lamlet CLI, or embedding
-  Lamlet from Rust.
+  regions, the Lamlet standard library (crates/lamlet/std/std.lam), the K primitives, Lamlet macros, the lamlet CLI,
+  or the interpreter in crates/lamlet. For documents built into pages (the `content` package, `lamlet build`),
+  also use `lamlet-documents`; for Rust hosts and extensions, `lamlet-embedding`.
 ---
 
 # Lamlet expert guide (language version 0.2)
@@ -22,6 +23,9 @@ specification matters, consult `docs/spec.md`; it is normative.
 
 **Before you claim any Lamlet code works, run it** (see §8). Never invent syntax or library functions: if it is
 not in this guide, `references/std.md`, or `docs/spec.md`, it does not exist.
+
+Related skills: **`lamlet-documents`** (pages: headings, tables, `content`, Markdown and HTML output) and
+**`lamlet-embedding`** (Rust hosts, natives, extensions).
 
 ## 1. The mental model, in seven rules
 
@@ -53,7 +57,7 @@ x   pkg::x   K::add   +   std::+                names; `::` separates module pat
 .label   .label=   #tag                          getter / setter / variant constructor (function values)
 
 {f a b}                 application              {f}            call a zero-argument function
-{^ {x y} decl* body}    lambda                   {^ name {x} …} recursive lambda (name = itself)
+{^ {x y} decl* body}    lambda (λ is the same head: {λ {x} …})   {^ name {x} …} recursive lambda (name = itself)
 {: e T}                 type ascription (T runs at compile time, as [% T]: it may use only static names)
 {' a b c}   {'}         list literal / empty list
 {. a 1 b 2}  {.}        record literal (labels are word identifiers, not evaluated)
@@ -83,12 +87,42 @@ only exception. A lone `;` inside code is a syntax error. Balanced comments cont
 braces/brackets and closed Strings; `;;` has no special meaning inside them. Strings and prose retain literal
 semicolons. `~` is an ordinary symbolic identifier.
 
+### What `#` means
+
+`#` has three unrelated roles, told apart by what touches it:
+
+| Written | Meaning |
+|---|---|
+| `[# x 1]`, `[# {f x} …]` (a bracket head, then a space) | a declaration: binds names for the rest of the scope |
+| `#tag` (touching a word, in code) | a variant constructor: `{#circle 1.0}` builds a tagged value; `match`/`!case` takes it apart |
+| `# Title` (at the start of a prose line, outside any region) | not Lamlet at all: a Markdown heading, which `lamlet-documents` builds into a heading |
+
 ### Bodies
 
 A lambda body is `[# ...]` declarations followed by exactly one result expression. Each declaration binds the
 rest of the body (`let*` semantics) and generalizes (let-polymorphism). Rebinding a name in the same scope is an
 error; shadowing it in an inner scope is allowed. A document is a module: its declarations are in source order,
 and its expression regions are its results.
+
+### Document level
+
+A `.lam` file is a document (spec §10). Only `$`-spellings are active:
+
+| Spelling | Meaning |
+|---|---|
+| `$name`, `$pkg::name` | reads a binding, no call. A following `.` is prose: `I am $AGE.` reads `AGE` |
+| `${…}` | an expression region |
+| `$[…]` | a declaration, import, macro, native, `[% ]`, or template |
+| `$;{…}`, `$;[…]` | a disabled region: inert text, dropped from the output |
+| `$$` | a literal `$`; any other `$` not followed by a name, `{`, or `[` is prose (`$5`, `$ {x}`) |
+
+- Once `${` or `$[` starts, the scanner commits: an unterminated region is an error, never prose.
+- Inside code, `$` is an error except in Strings and template holes.
+- **Doc comments:** the prose paragraph directly above a declaration (no blank line between, the declaration at
+  the start of its line), a disabled region directly before it, or `;;` lines directly before it inside code.
+  Docs never change checking; hosts read them (`Document::doc`).
+- `lamlet FILE` prints the document: prose as written, each region replaced by its value, and lines holding
+  only declarations removed.
 
 ## 3. Types
 
@@ -224,8 +258,10 @@ Useful std-free idiom, a pipeline:
 
 ## 5. Writing idiomatic Lamlet
 
-`references/examples.lam` is a verified tour: every line in it is checked by `cargo test`. Patterns to reach
-for:
+`references/examples.lam` is a verified tour of each feature, and `references/patterns.lam` solves the problems
+that need several together: sorting, lookup tables, trees without recursive types, replacing mutual recursion,
+polymorphism through bindings, parsing with options, state machines, `!pipe`/`!let`-style macros, types computed
+from data, and curve combinators. `cargo test` checks every `expect:` line in both. Patterns to reach for:
 
 - **Loops:** use `fold`, `map`, `filter`, and `range`, or a tail-recursive named lambda with an accumulator.
 - **Text:** use `[f "..."]` for typed interpolation. `format` takes `List(String)`, so convert values with `str`
@@ -243,6 +279,28 @@ for:
   (`lerp`, `clamp`, `sin`, `cos`, `pow`, `pi`).
 - **Pipelines:** `xs.f.g` reads left to right, but only the last step of a head chain takes arguments. For
   multi-argument stages, nest calls or use `!pipe`.
+- **Trees and graphs:** List is the only recursive type, so store nodes in a list and refer to children by
+  index (patterns §3).
+- **Failure a caller can handle:** return an option or a variant with a reason; `error` aborts everything.
+
+### Names
+
+Recommended names (`docs/conventions.md`; not checked by the language):
+
+- Values, functions, fields, and variant tags in lower camel case (`isEmpty`, `startFrame`, `#lightOnly`);
+  types in upper camel case (`Content`); macros `!camelCase`; private names with a leading `_`.
+- Predicates start with `is` or `has`. Two forms of one function: the plain name takes the simple argument, and
+  `…Of` the general one (`emph "word"`, `emphOf content`).
+- Packages in lower case with `_` (`garden_tools`); files, ids, cue names, and extension programs with `-`
+  (`point-light.lam`, `{#bounced-light}`, `lamlet-present`); native ids `pkg.part/dashed-name`.
+
+### Reading printed types
+
+- Constraints print on the variable: `Fn([a:Scalar, String], Content)` means "any Scalar `a`".
+- Capabilities print after the type: `Fn([], Int) !Runtime`.
+- Records and variants print fields sorted, so `{. b 1 a 2}` is `{a: Int, b: Int}`.
+- A package's named types are printed in full, structurally (a `content` value is a long
+  `List(<close: String, …>)`); structural types have no names.
 
 ## 6. Pitfalls
 
@@ -319,8 +377,8 @@ Display formats used in `expect:` lines:
 - **A K primitive** is a last resort, only for what Lamlet cannot express with reasonable performance. Add one
   `Intrinsic` to `crates/lamlet/src/builtins.rs` with a scheme (for example `forall a:Eq. Fn([a], Int)`), and
   justify it in `docs/spec.md` §8. The checker must never get per-primitive code.
-- **Host functionality** is a native (`[Native ...]` plus `NativeRegistry::register_fn`), never a primitive. See
-  `references/host-api.md`.
+- **Host functionality** is a native (`[Native ...]` plus a registration in Rust), never a primitive. See the
+  `lamlet-embedding` skill and its `references/host-api.md`.
 - **Language changes** must keep the invariants of §1: no name- or type-directed special cases, explicit
   staging, determinism. Record the decision in `docs/rationale.md`, and update `docs/spec.md` and
   `docs/quick-start.md`.
@@ -335,7 +393,10 @@ Display formats used in `expect:` lines:
 | `docs/rationale.md` | Why things are the way they are |
 | `crates/lamlet/std/std.lam` | The standard library source; also the best style reference |
 | `references/std.md` | Every std export with its type (generated) |
-| `references/examples.lam` | Verified idioms |
+| `references/examples.lam` | Verified idioms, one per feature |
+| `references/patterns.lam` | Verified solutions that combine features |
 | `references/errors.md` | Diagnostics, and their fixes |
-| `references/host-api.md` | The Rust API and CLI |
+| `docs/conventions.md` | Naming conventions |
+| `docs/documents.md` | Documents and `lamlet build` (the `lamlet-documents` skill) |
+| `docs/embedding.md` | The Rust API (the `lamlet-embedding` skill, with `references/host-api.md` there) |
 | `crates/lamlet/src/` | Interpreter internals (see `docs/implementation.md`) |

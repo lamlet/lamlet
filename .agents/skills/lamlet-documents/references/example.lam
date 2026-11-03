@@ -1,0 +1,17 @@
+$[Import* std]$[Import* content]
+$[# rooms [% {' {. name "study" area 12} {. name "hall" area 20} {. name "kitchen" area 9}}]]
+$[# total [% {fold rooms 0 {^ {acc r} {+ acc {.area r}}}}]]
+$[# {row r} {' {.name r} [f "${.area r} m²"]}]
+# The house {#house}
+
+The house has ${strong {str {length rooms}}} rooms and $total m² in all (${link "plan" "plan.pdf"}).
+
+${table {' "Room" "Area"} {map rooms row}}
+
+## Rooms of 10 m² or more
+
+${numberedOf {map {filter rooms {^ {r} {>= {.area r} 10}}} .name}}
+
+The heating load is ${math "q = U A \\Delta T"}, set in ${code "heating.toml"}.
+
+${codeBlock "toml" "[heating]\nflow = 45"}

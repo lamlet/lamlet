@@ -1,6 +1,6 @@
 # std reference (generated from crates/lamlet/std/std.lam — do not edit by hand)
 
-Each entry: name, then its doc (which starts with its type). `_names` are private and omitted.
+Each entry: name, then its doc (which starts with its type when it has one). `_names` are private and omitted.
 
 
 ## 1. Functions

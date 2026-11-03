@@ -1,0 +1,125 @@
+Lamlet patterns, verified: this file is also tests/fixtures/skill-patterns.lam (a symlink), so `cargo test`
+checks every `expect:` line below against the interpreter. Each expect line gives the next expression region's
+value. Where examples.lam shows each feature once, this file solves the problems that need several of them
+together, the ones that are easy to get wrong.
+
+$[Import* std]
+
+1. Sorting. std has no sort; a polymorphic insertion sort is two small definitions. `Ord` comes from `<`, so the
+same function sorts Ints, Floats, and Strings. Sorting by a key passes a function.
+$[# {insert x sorted} {caseList sorted {^ {} {' x}} {^ {y ys} {!if {< x y} {cons x sorted} {cons y {insert x ys}}}}}]
+$[# {sort xs} {fold xs {'} {^ {acc x} {insert x acc}}}]
+$[# {insertBy key x sorted} {caseList sorted {^ {} {' x}} {^ {y ys} {!if {< {key x} {key y}} {cons x sorted} {cons y {insertBy key x ys}}}}}]
+$[# {sortBy xs key} {fold xs {'} {^ {acc x} {insertBy key x acc}}}]
+${sort {' 3 1 2}} ${sort {' "pear" "fig" "apple"}} ${map {sortBy {' {. n "b" age 3} {. n "a" age 1}} .age} .n}
+expect: [1, 2, 3]
+expect: ["apple", "fig", "pear"]
+expect: ["a", "b"]
+
+2. Lookup tables are lists of pairs, read through an option. Build a fixed table at compile time with `[% ...]`, and
+check facts about it with `!assert`, so a wrong table fails the check instead of a later run.
+$[# {lookup table key} {caseList {filter table {^ {p} {= {.first p} key}}} {^ {} none} {^ {p rest} {some {.second p}}}}]
+$[# sizes [% {' {pair "s" 1} {pair "m" 2} {pair "l" 3}}]]
+${withDefault {lookup sizes "m"} 0} ${withDefault {lookup sizes "xl"} 0} ${!assert {length sizes} 3}
+expect: 2
+expect: 0
+expect: 3
+
+3. Trees. List is the only recursive type, so a tree is an arena: a list of nodes that name their children by
+index. A recursive function walks it by index (non-tail recursion is fine at this depth).
+$[# tree [% {' {. label "root" kids {' 1 2}} {. label "a" kids {' 3}} {. label "b" kids {'}} {. label "c" kids {'}}}]]
+$[# {count nodes i} {fold {.kids {nth nodes i}} 1 {^ {acc k} {+ acc {count nodes k}}}}]
+$[# {paths nodes i prefix} [# here [f "$prefix/${.label {nth nodes i}}"]]
+  {cons here {flatten {map {.kids {nth nodes i}} {^ {k} {paths nodes k here}}}}}]
+${count tree 0} ${paths tree 0 ""}
+expect: 4
+expect: ["/root", "/root/a", "/root/a/c", "/root/b"]
+
+4. No mutual recursion: one named function dispatches on a variant tag instead. `even`/`odd` become one function
+whose argument says which question is asked.
+$[# {parity q} {!case q {even n {!if {= n 0} true {parity {#odd {- n 1}}}}} {odd n {!if {= n 0} false {parity {#even {- n 1}}}}}}]
+${parity {#even 10}} ${parity {#odd 7}}
+expect: true
+expect: true
+
+5. Polymorphism comes from bindings, not parameters. A let-bound function can be used at two types; the same
+function passed as a parameter is monomorphic inside the lambda (no higher-rank types), so pass two functions or
+bind it outside.
+$[# {twice f x} {f {f x}}]
+$[# {both f g} {pair {twice f 1} {twice g "a"}}]
+${both {^ {n} {+ n 1}} {^ {s} {++ s "!"}}}
+expect: {first: 3, second: "a!!"}
+
+6. Records are row-polymorphic in functions, but every list has one element type. To treat records of different
+shapes alike, map each one to a common record first.
+$[# {label r} [f "${.name r} (${.age r})"]]
+$[# cat {. name "Tom" age 3 lives 9}]
+$[# owner {. name "Ann" age 40 email "a@b.c"}]
+${' {label cat} {label owner}}
+expect: ["Tom (3)", "Ann (40)"]
+
+7. Numbers as text. `str` of a Float always shows a fraction or an exponent; `fixed` gives a set number of places;
+Int division is `div`, Float division is `/`.
+${str 2.0} ${str 0.000012} ${fixed {/ 2.0 3.0} 2} ${div 7 2} ${% -7 2} ${str {round 2.5}}
+expect: "2.0"
+expect: "1.2e-5"
+expect: "0.67"
+expect: 3
+expect: 1
+expect: "3"
+
+8. String helpers are folds over `chars`. A String has no indexing primitive: use `chars`, `substr`, `split`.
+$[# {repeat s n} {concat {map {range 0 n} {^ {i} s}}}]
+$[# {padLeft s width} {++ {repeat " " {max 0 {- width {length {chars s}}}}} s}]
+$[# {startsWith s prefix} {= {substr s 0 {length {chars prefix}}} prefix}]
+[${padLeft "7" 3}] ${repeat "ab" 3} ${startsWith "lamlet" "lam"} ${join "-" {reverse {split "a.b.c" "."}}}
+expect: "  7"
+expect: "ababab"
+expect: true
+expect: "c-b-a"
+
+9. Long loops use an accumulator and a tail call; the result is built in reverse and reversed once.
+$[# {squaresUpTo n} {{^ loop {i acc} {!if {> i n} {reverse acc} {loop {+ i 1} {cons {* i i} acc}}}} 1 {'}}]
+${length {squaresUpTo 10000}} ${take {squaresUpTo 10000} 4}
+expect: 10000
+expect: [1, 4, 9, 16]
+
+10. Errors abort everything, so "may fail" is an option (or a variant with a reason) that the caller handles.
+$[# {parseDigit c} {fold {range 0 10} none {^ {found d} {!if {= {str d} c} {some d} found}}}]
+$[# {parseNat s} {fold {chars s} {some 0} {^ {acc c} {caseOption acc {^ {} none} {^ {n} {caseOption {parseDigit c} {^ {} none} {^ {d} {some {+ {* n 10} d}}}}}}}}]
+${parseNat "2026"} ${parseNat "20x6"}
+expect: #some(2026)
+expect: #none
+
+11. State machines: a variant for the state, a variant for the event, and one pure `step`; `fold` replays a log.
+$[# {step state event} {!case state
+  {idle u {!case event {start n {#running n}} {tick u state} {stop u state}}}
+  {running n {!case event {start m state} {tick u {#running {+ n 1}}} {stop u {#done n}}}}
+  {done n state}}]
+${fold {' {#start 0} {#tick unit} {#tick unit} {#stop unit} {#tick unit}} {#idle unit} step}
+expect: #done(2)
+
+12. Macros for syntax only. `!pipe` threads a value through calls, `!let` names a value, and a splice group
+`{... a b}` repeats two elements together (here, a record from key-value pairs).
+$[Macro !pipe {{x} x} {{x {f args ...} rest ...} {!pipe {f x args ...} rest ...}}]
+$[Macro !let {{name value body} {{^ {name} body} value}}]
+$[Macro !rec {{{k v} ...} {. {... k v} ...}}]
+${!pipe {range 0 10} {filter {^ {n} {= {% n 2} 0}}} {map {^ {n} {* n n}}} {fold 0 +}} ${!let x 5 {* x x}} ${!rec {a 1} {b "two"}}
+expect: 120
+expect: 25
+expect: {a: 1, b: "two"}
+
+13. Types computed from data, at compile time, then used to check a value. A named type must be a static binding.
+$[# fields [% {' "x" "y" "z"}]]
+$[# Vec3 [% {Struct {map fields {^ {n} {Field n Float}}}}]]
+$Vec3 ${.y {: {. x 1.0 y 2.0 z 3.0} Vec3}}
+expect: {x: Float, y: Float, z: Float}
+expect: 2.0
+
+14. Curves are functions of time; combinators build new ones. A host samples them (see `lamlet-embedding`).
+$[# {ease t} {* t {* t {- 3.0 {* 2.0 t}}}}]
+$[# {seq a b split} {^ {t} {!if {< t split} {a {/ t split}} {b {/ {- t split} {- 1.0 split}}}}}]
+$[# {between from to} {^ {t} {lerp from to {ease {clamp t 0.0 1.0}}}}]
+$[# path {seq {between 0.0 10.0} {between 10.0 0.0} 0.5}]
+${map {' 0.0 0.25 0.5 0.75 1.0} path}
+expect: [0.0, 5.0, 10.0, 5.0, 0.0]
