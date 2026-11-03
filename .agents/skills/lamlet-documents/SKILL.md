@@ -112,8 +112,10 @@ region's position (`this is markup for `html`, which cannot be written as Markdo
   function).
 - **Joining:** `{cat {' c1 c2 ...}}`; nothing is `empty`. Content is a list, so `flatten`, `map`, and `fold` work
   on it too.
-- **Attributes:** `{attr "key" "value"}`, in a list, for `span`, `group`, and `anchor`. Values are Strings:
-  convert numbers with `str`.
+- **Attributes:** `{attr "key" value}`, in a list, for `span`, `group`, and `anchor`. A value is data of any type
+  with equality, kept typed for the host: `{attr "mix" 0.5}`, `{attr "at" {. x 1.0 y 2.0}}`, `{attr "k" "v"}`
+  (`Attr` is `{key: String, value: Data}`; `attr` calls `toData`). Don't print numbers or records into Strings
+  for a host to parse back. Functions are a type error. Prose heading attributes (`{#id k=v}`) are Strings.
 - **`span` and `group` are for hosts:** HTML writes the name as `class` and the attributes as `data-`
   attributes; the other backends write only the content.
 - **Content is flat events** (`#open`, `#close`, `#text`, `#leaf`), because List is Lamlet's only recursive type.
@@ -168,7 +170,7 @@ cargo build --release                       # the CLI is ./target/release/lamlet
 lamlet page.lam                             # print it: copied text prose
 lamlet build page.lam --prose commonmark -o page.md          # the format from the extension
 lamlet build page.lam --prose commonmark --to html --standalone > page.html
-lamlet build page.lam --to ir               # the IR as JSON: {"lamletDoc": 1, "blocks": [...]}
+lamlet build page.lam --to ir               # the IR as JSON: {"lamletDoc": 2, "blocks": [...]}
 lamlet build page.lam --to ir --prepared    # without evaluating: runtime regions are {"type": "hole", "region": N}
 lamlet check page.lam                       # types only, no output
 ```

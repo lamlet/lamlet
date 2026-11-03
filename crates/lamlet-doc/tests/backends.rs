@@ -211,5 +211,40 @@ fn json_escapes_and_encodes_data() {
     assert_eq!(json::string("a\"b\\c\n\u{1}"), r#""a\"b\\c\n\u0001""#);
     let j = ok("${. a {some 1.0} b {'}}", TEXT, json::write);
     assert!(j.contains(r#""data":{"a":{"tag":"some","value":1.0},"b":[]}"#), "{j}");
-    assert!(j.starts_with(r#"{"lamletDoc":1,"blocks":["#), "{j}");
+    assert!(j.starts_with(r#"{"lamletDoc":2,"blocks":["#), "{j}");
+}
+
+#[test]
+fn typed_attributes_keep_their_data() {
+    use lamlet_doc::{ir, Block, Inline};
+    let src = format!(
+        "{HEAD}${{span \"cue\" {{' {{attr \"m\" {{. a 1.0 b {{' 1 2}}}}}} {{attr \"o\" {{some \"x\"}}}} {{attr \"s\" \"plain\"}} {{attr \"n\" 2}}}} {{text \"t\"}}}}"
+    );
+    let evaluated = lower("t.lam", &src, TEXT).unwrap();
+    let Some(Block::Plain(xs)) = evaluated.blocks.first() else { panic!("{evaluated:?}") };
+    let Some(Inline::Span { attrs, .. }) = xs.iter().find(|i| matches!(i, Inline::Span { .. })) else { panic!("{xs:?}") };
+    let record = Data::Record([("a".to_string(), Data::Float(1.0)), ("b".to_string(), Data::List(vec![Data::Int(1), Data::Int(2)]))].into());
+    assert_eq!(ir::attr(attrs, "m"), Some(&record));
+    assert_eq!(ir::attr(attrs, "o"), Some(&Data::Variant("some".into(), Box::new(Data::String("x".into())))));
+    assert_eq!(ir::attr_str(attrs, "s"), Some("plain"));
+    assert_eq!(ir::attr_str(attrs, "n"), None);
+    assert_eq!(ir::attr_f64(attrs, "n"), Some(2.0));
+    let j = json::write(&evaluated).unwrap();
+    assert!(j.contains(r#""attrs":[["m",{"a":1.0,"b":[1,2]}],["o",{"tag":"some","value":"x"}],["s","plain"],["n",2]]"#), "{j}");
+    let h = html::write(&evaluated).unwrap();
+    assert!(h.contains(r#"data-m="{&quot;a&quot;:1.0,&quot;b&quot;:[1,2]}""#) && h.contains(r#"data-s="plain""#) && h.contains(r#"data-n="2""#), "{h}");
+}
+
+#[test]
+fn attribute_values_are_checked() {
+    // A function has no data form: `attr` (through `toData`) rejects it at the check.
+    let e = run("${span \"c\" {' {attr \"f\" {^ {x} x}}} {text \"a\"}}", TEXT, text::write).unwrap_err();
+    assert!(e.contains("does not support equality"), "{e}");
+    // content's own attributes are Strings.
+    let e = run("${: {' {#leaf {. name \"code\" attrs {' {attr \"text\" 1}}}}} Content}", TEXT, text::write).unwrap_err();
+    assert!(e.contains("code's attribute `text` is a String"), "{e}");
+    // Prose heading attributes are Strings, read as numbers by `attr_f64`.
+    let ir = lower("t.lam", &format!("{HEAD}\n# T {{#t hold=1.5}}"), COMMONMARK).unwrap();
+    let Some(lamlet_doc::Block::Heading { attrs, .. }) = ir.blocks.first() else { panic!("{ir:?}") };
+    assert_eq!(lamlet_doc::ir::attr_f64(attrs, "hold"), Some(1.5));
 }

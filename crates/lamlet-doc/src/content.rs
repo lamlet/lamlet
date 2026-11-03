@@ -4,7 +4,7 @@
 //! `#leaf`). Here the events become a tree, checking that every opening has its closing and that each element
 //! holds what it may: inlines in a paragraph, items in a list, rows in a table.
 
-use crate::ir::{attr, Attrs, Block, Inline};
+use crate::ir::{attr, attr_str, Attrs, Block, Inline};
 use crate::Error;
 use lamlet::embed::{Data, Location};
 
@@ -12,7 +12,7 @@ use lamlet::embed::{Data, Location};
 pub const CONTENT_SOURCE: &str = include_str!("content.lam");
 
 /// The written type of `Content` (`List(Event)`): a region of this type lowers to content.
-pub const CONTENT_TYPE: &str = "List(<close: String, leaf: {attrs: List({key: String, value: String}), name: String}, open: {attrs: List({key: String, value: String}), name: String}, text: String>)";
+pub const CONTENT_TYPE: &str = "List(<close: String, leaf: {attrs: List({key: String, value: Data}), name: String}, open: {attrs: List({key: String, value: Data}), name: String}, text: String>)";
 
 /// A piece of lowered content: an inline, or a block that interrupts the surrounding inlines.
 #[derive(Clone, Debug, PartialEq)]
@@ -86,8 +86,8 @@ fn element(d: &Data) -> Result<(String, Attrs), String> {
         .iter()
         .map(|a| match a {
             Data::Record(r) => match (r.get("key"), r.get("value")) {
-                (Some(Data::String(k)), Some(Data::String(v))) => Ok((k.clone(), v.clone())),
-                _ => Err("an attribute has a String key and value".to_string()),
+                (Some(Data::String(k)), Some(v)) => Ok((k.clone(), v.clone())),
+                _ => Err("an attribute has a String key and a value".to_string()),
             },
             _ => Err("an attribute is a record".to_string()),
         })
@@ -123,8 +123,13 @@ fn sequence(events: &[Event], pos: &mut usize, open: Option<&str>, at: &Option<L
     }
 }
 
+/// A String attribute the element needs.
 fn need<'a>(attrs: &'a Attrs, key: &str, what: &str, at: &Option<Location>) -> Result<&'a str, Error> {
-    attr(attrs, key).ok_or_else(|| Error::at(at, format!("{} needs the attribute `{}`", what, key)))
+    match attr(attrs, key) {
+        Some(Data::String(s)) => Ok(s),
+        Some(_) => Err(Error::at(at, format!("{}'s attribute `{}` is a String", what, key))),
+        None => Err(Error::at(at, format!("{} needs the attribute `{}`", what, key))),
+    }
 }
 
 /// The attributes other than the ones an element uses itself.
@@ -137,16 +142,16 @@ fn leaf(name: &str, attrs: &Attrs, at: &Option<Location>) -> Result<Node, Error>
     Ok(match name {
         "image" => Node::Inline(Inline::Image {
             src: need(attrs, "src", "an image", at)?.into(),
-            alt: attr(attrs, "alt").unwrap_or("").into(),
-            title: attr(attrs, "title").map(String::from),
+            alt: attr_str(attrs, "alt").unwrap_or("").into(),
+            title: attr_str(attrs, "title").map(String::from),
             at: at_,
         }),
         "code" => Node::Inline(Inline::Code { text: need(attrs, "text", "code", at)?.into(), at: at_ }),
-        "math" => Node::Inline(Inline::Math { tex: need(attrs, "tex", "a formula", at)?.into(), display: attr(attrs, "display") == Some("true"), at: at_ }),
+        "math" => Node::Inline(Inline::Math { tex: need(attrs, "tex", "a formula", at)?.into(), display: attr_str(attrs, "display") == Some("true"), at: at_ }),
         "break" => Node::Inline(Inline::Break),
         "raw" => Node::Inline(Inline::Raw { format: need(attrs, "format", "raw markup", at)?.into(), text: need(attrs, "text", "raw markup", at)?.into(), at: at_ }),
         "rawBlock" => Node::Block(Block::Raw { format: need(attrs, "format", "raw markup", at)?.into(), text: need(attrs, "text", "raw markup", at)?.into(), at: at_ }),
-        "codeBlock" => Node::Block(Block::CodeBlock { lang: attr(attrs, "lang").unwrap_or("").into(), text: need(attrs, "text", "a code block", at)?.into(), at: at_ }),
+        "codeBlock" => Node::Block(Block::CodeBlock { lang: attr_str(attrs, "lang").unwrap_or("").into(), text: need(attrs, "text", "a code block", at)?.into(), at: at_ }),
         "anchor" => Node::Inline(Inline::Anchor { name: need(attrs, "name", "an anchor", at)?.into(), attrs: rest(attrs, &["name"]), at: at_ }),
         "pause" => {
             let s = need(attrs, "seconds", "a pause", at)?;
@@ -200,7 +205,7 @@ fn element_node(name: &str, attrs: &Attrs, children: Vec<Node>, at: &Option<Loca
         "heading" => {
             let l = need(attrs, "level", "a heading", at)?;
             let level = l.parse::<u8>().ok().filter(|n| (1..=6).contains(n)).ok_or_else(|| Error::at(at, format!("a heading's level is 1 to 6, not {}", l)))?;
-            Node::Block(Block::Heading { level, id: attr(attrs, "id").map(String::from), attrs: rest(attrs, &["level", "id"]), inlines: inlines(children, "a heading", at)? })
+            Node::Block(Block::Heading { level, id: attr_str(attrs, "id").map(String::from), attrs: rest(attrs, &["level", "id"]), inlines: inlines(children, "a heading", at)? })
         }
         "list" => {
             let items = children
@@ -210,7 +215,7 @@ fn element_node(name: &str, attrs: &Attrs, children: Vec<Node>, at: &Option<Loca
                     _ => Err(Error::at(at, "a list holds only items")),
                 })
                 .collect::<Result<_, _>>()?;
-            Node::Block(Block::List { ordered: attr(attrs, "ordered") == Some("true"), items })
+            Node::Block(Block::List { ordered: attr_str(attrs, "ordered") == Some("true"), items })
         }
         "item" => Node::Item(blocks(children, "a list item", at)?),
         "table" => {

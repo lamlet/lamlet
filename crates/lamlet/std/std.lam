@@ -304,6 +304,14 @@ $[# Unit K::unitType]
 The Type of Type values.
 $[# Type K::typeType]
 
+The Type of type-erased values (toData): data of any comparable type, kept for the host to read. A Data value
+cannot be inspected in Lamlet; it can only be compared with =.
+$[# Data K::dataType]
+
+Eq A: Fn([A], Data). Forgets the value's type, keeping the value, so values of different types can share
+one List or field. Functions and native values are rejected by the check.
+$[# toData K::toData]
+
 Fn([Type], Type). The Type of lists of T.
 $[# List K::listType]
 

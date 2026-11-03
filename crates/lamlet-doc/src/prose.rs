@@ -19,7 +19,7 @@
 use crate::content::Piece;
 use crate::ir::{Attrs, Block, Inline};
 use crate::{Error, COMMONMARK};
-use lamlet::embed::Location;
+use lamlet::embed::{Data, Location};
 use std::cell::RefCell;
 
 const FIRST_SLOT: u32 = 0xE000;
@@ -217,9 +217,9 @@ fn heading_attrs(text: &str) -> (&str, Option<String>, Attrs) {
         if let Some(i) = tok.strip_prefix('#') {
             id = Some(i.to_string());
         } else if let Some(c) = tok.strip_prefix('.') {
-            attrs.push(("class".to_string(), c.to_string()));
+            attrs.push(("class".to_string(), Data::String(c.to_string())));
         } else if let Some((k, v)) = tok.split_once('=') {
-            attrs.push((k.to_string(), v.to_string()));
+            attrs.push((k.to_string(), Data::String(v.to_string())));
         } else {
             return (text, None, vec![]);
         }

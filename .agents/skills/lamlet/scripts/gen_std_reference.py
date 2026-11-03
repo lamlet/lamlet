@@ -22,7 +22,7 @@ def types_of(names: list[str], imports: str) -> dict[str, str]:
         doc = pathlib.Path(d) / "types.lam"
         doc.write_text(imports + "\n" + " ".join(f"${n}" for n in names) + "\n")
         out = subprocess.run([str(root / "target" / "release" / "lamlet"), "eval", str(doc)], capture_output=True, text=True, check=True)
-    attr = "{key: String, value: String}"
+    attr = "{key: String, value: Data}"
     element = f"{{attrs: List({attr}), name: String}}"
     event = f"<close: String, leaf: {element}, open: {element}, text: String>"
     named = [(f"List({event})", "Content"), (event, "Event"), (element, "Element"), (attr, "Attr")]

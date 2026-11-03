@@ -98,6 +98,7 @@ pub static CONSTANTS: &[Constant] = &[
     Constant { name: "stringType", scheme: "Type", value: || ty_value(TypeDesc::String) },
     Constant { name: "unitType", scheme: "Type", value: || ty_value(TypeDesc::Unit) },
     Constant { name: "typeType", scheme: "Type", value: || ty_value(TypeDesc::Type) },
+    Constant { name: "dataType", scheme: "Type", value: || ty_value(TypeDesc::Data) },
 ];
 
 pub static INTRINSICS: &[Intrinsic] = &[
@@ -149,6 +150,9 @@ pub static INTRINSICS: &[Intrinsic] = &[
         (x, y) => num_cmp(x, y)? == std::cmp::Ordering::Less,
     }))),
     intrinsic!("hash", "forall a:Eq. Fn([a], Int)", 1, |a| v(Value::Int(hash_value(&a[0])?))),
+    // Type erasure for hosts: the value is kept as is; only its static type is forgotten. Eq rules out functions
+    // and native values, so the result is always plain data (`embed::Data`).
+    intrinsic!("toData", "forall a:Eq. Fn([a], Data)", 1, |a| v(a[0].clone())),
     // Eliminators: each takes handler functions and calls exactly one.
     intrinsic!("caseBool", "Fn([Bool, Fn([], a) !e, Fn([], a) !e], a) !e", 3, |a| match &a[0] {
         Value::Bool(true) => Ok(Outcome::Call(a[1].clone(), vec![])),
@@ -392,6 +396,7 @@ impl<'a> SchemeParser<'a> {
             "String" => STRING,
             "Unit" => UNIT,
             "Type" => TYPE,
+            "Data" => DATA,
             "List" => {
                 self.expect("(")?;
                 let e = self.ty(t)?;

@@ -41,7 +41,7 @@ fn prepare_is_replaced_by_build() {
     let out = Command::new(env!("CARGO_BIN_EXE_lamlet")).args(["build", &example(), "--to", "ir", "--prepared"]).output().unwrap();
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
     let ir: Json = serde_json::from_slice(&out.stdout).unwrap();
-    assert_eq!(ir["lamletDoc"], 1);
+    assert_eq!(ir["lamletDoc"], 2);
 }
 
 #[test]

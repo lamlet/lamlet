@@ -158,8 +158,8 @@ Tools for one kind of document are extensions, not features of Lamlet:
   release:
 
   ```toml
-  lamlet = { git = "https://github.com/lamlet/lamlet", tag = "v0.3.1" }
-  lamlet-doc = { git = "https://github.com/lamlet/lamlet", tag = "v0.3.1" }
+  lamlet = { git = "https://github.com/lamlet/lamlet", tag = "v0.4.0" }
+  lamlet-doc = { git = "https://github.com/lamlet/lamlet", tag = "v0.4.0" }
   ```
 
   A host that depends on both Lamlet and an extension's crate must use the tag the extension uses, or the build

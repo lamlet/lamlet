@@ -187,6 +187,11 @@ impl Value {
         }
     }
 
+    /// Whether this is plain data at its top (not a function or a native value), so equality can compare it.
+    pub fn is_data(&self) -> bool {
+        !self.is_callable() && !matches!(self, Value::Opaque(_))
+    }
+
     pub fn is_callable(&self) -> bool {
         matches!(self, Value::Closure(_) | Value::Builtin(_) | Value::Label(_) | Value::Native(_))
     }
@@ -230,6 +235,8 @@ impl Value {
                         true
                     }
                 }
+                // Values of one static type always share a representation; two `Data` values need not.
+                (x, y) if x.is_data() && y.is_data() => false,
                 _ => return Err(format!("equality is not supported between {} and {}", a.type_name(), b.type_name())),
             };
             if !same {

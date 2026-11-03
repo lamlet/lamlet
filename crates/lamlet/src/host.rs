@@ -211,6 +211,22 @@ impl HostContext {
     }
 }
 
+/// Whether a value holds no function or native value anywhere (what a `Data` value may be).
+fn is_plain_data(v: &Value) -> bool {
+    let mut work = vec![v.clone()];
+    while let Some(x) = work.pop() {
+        match &x {
+            Value::List(l) => work.extend(l.iter()),
+            Value::Record(fs) => work.extend(fs.iter().map(|f| f.1.clone())),
+            Value::Variant(p) => work.push(p.1.clone()),
+            Value::Float(f) if !f.is_finite() => return false,
+            x if !x.is_data() => return false,
+            _ => {}
+        }
+    }
+    true
+}
+
 /// Check that a value conforms to a descriptor (used to validate native arguments and results).
 pub fn conforms(v: &Value, t: &TypeDesc) -> bool {
     match (t, v) {
@@ -220,6 +236,7 @@ pub fn conforms(v: &Value, t: &TypeDesc) -> bool {
         (TypeDesc::Float, Value::Float(f)) => f.is_finite() && !(*f == 0.0 && f.is_sign_negative()),
         (TypeDesc::String, Value::Str(_)) => true,
         (TypeDesc::Type, Value::Type(_)) => true,
+        (TypeDesc::Data, x) => is_plain_data(x),
         (TypeDesc::List(e), Value::List(l)) => l.iter().all(|x| conforms(&x, e)),
         (TypeDesc::Record(fs), Value::Record(r)) => {
             fs.len() == r.len() && fs.iter().zip(r.iter()).all(|((n, t), (m, x))| n == m && conforms(x, t))

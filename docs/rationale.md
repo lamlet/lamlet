@@ -240,6 +240,26 @@ justified as literals, like Strings and numbers. Documents using `[f "..."]` or 
 rewritten. In prose, `$f"{` opens a region where it used to read the binding `f` followed by the text `"{`. A
 LaTeX hole no longer escapes a String by itself: a formula that shows a name calls `latexEscape`.
 
+## D14. A type-erased value for hosts: `Data`
+
+**Decision.** `Data` is a ground type and `K::toData : ∀a:Eq. Fn([a], Data)` forgets a value's static type,
+keeping the value. A `Data` value can be compared with `=` and handed to a host; nothing in Lamlet inspects it.
+
+**Why.** Some lists are heterogeneous by nature: a document element's attributes (`content`'s `Attr`) pair keys
+with values of different types, a number here, a record there. A List is homogeneous, Lamlet has no `Any`, no
+polymorphic types, and no recursive types other than List, so such a value could only be written as a String,
+which the author's code printed and the host parsed back, losing the types the author had checked. `Data` keeps
+the value as it is, so the host reads it as data (`embed::Data`), and the host's own reader stays the one check
+of what a key's value must be. `Eq` is the constraint because it excludes exactly what has no plain-data form:
+functions and opaque values.
+
+**Alternatives.** A variant of the scalar types plus lists and records cannot be written without a recursive
+type. Making `Attr` polymorphic would make an attribute list homogeneous again. A JSON String keeps working but
+moves the check to the host and the printing to every author.
+
+**Cost.** One ground type and one primitive. A `Data` value cannot be taken apart in Lamlet, deliberately: code
+that needs the value keeps it typed and erases it only where it is handed on.
+
 ## Known limitations
 
 - No mutual recursion, recursive types (other than List), polymorphic computed types, abstract types, or type

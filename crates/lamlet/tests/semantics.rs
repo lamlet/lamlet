@@ -1027,3 +1027,21 @@ fn every_std_export_is_documented() {
     assert!(!doc.docs.contains_key("_render"));
     assert!(check("$[Import std]").unwrap().docs.is_empty(), "a qualified import binds only the namespace");
 }
+
+// ---------------------------------------------------------------------------------------------------------
+// Data: type-erased values for hosts
+
+#[test]
+fn to_data_forgets_the_type_and_keeps_the_value() {
+    // Values of different types share one List; the values are unchanged.
+    assert_eq!(one(&s("${' {toData 1} {toData \"a\"} {toData {. a {' 1.0}}} {toData {some unit}}}")), "[1, \"a\", {a: [1.0]}, #some]");
+    assert_eq!(one(&s("${: {toData 1} Data}")), "1");
+    // Data is Eq; Data of different types are unequal, not an error.
+    assert_eq!(one(&s("${= {toData {. a 1}} {toData {. a 1}}}")), "true");
+    assert_eq!(one(&s("${= {toData 1} {toData 1.0}}")), "false");
+    assert_eq!(one(&s("${= {toData {' 1}} {toData {. a 1}}}")), "false");
+    // Functions have no data form, and Data cannot be used as what it was.
+    fails_with(&s("${toData {^ {x} x}}"), DiagKind::Type, "does not support equality");
+    fails_with(&s("${+ {toData 1} 1}"), DiagKind::Type, "Data");
+    assert_eq!(one(&s("$Data")), "Data");
+}

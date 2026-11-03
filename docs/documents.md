@@ -51,7 +51,7 @@ lamlet build page.lam --to ir                            # the IR as JSON
 | `text` | `.txt` | Plain text (the default; what `lamlet FILE` prints) |
 | `md` | `.md` | CommonMark, with GitHub tables |
 | `html` | `.html` | An HTML fragment, or a page with `--standalone` |
-| `ir` | `.json` | The IR: `{"lamletDoc": 1, "blocks": [...]}` |
+| `ir` | `.json` | The IR: `{"lamletDoc": 2, "blocks": [...]}`; attributes are `[[key, value], ...]`, each value as JSON data |
 
 ### Prose
 
@@ -114,6 +114,14 @@ ${table {' "Room" "Area"} {' {' "study" "12 m²"} {' "hall" "20 m²"}}}
 `s` is a String and `c` is content. `cat {' c1 c2 ...}` joins content, `empty` is none, and `attr key value`
 makes an attribute for `span`, `group`, and `anchor`. `span` and `group` carry names and attributes for hosts:
 HTML writes them as `class` and `data-` attributes, and the other backends write only their content.
+
+An attribute's value is data of any type with equality, kept as it is for the host: `{attr "mode" "fast"}`,
+`{attr "mix" 0.5}`, `{attr "at" {. x 1.0 y 2.0}}`, `{attr "names" {' "a" "b"}}`. `attr` erases the value's
+type with std's `toData` (its `Attr` is `{key: String, value: Data}`), so one list holds attributes of different
+types; functions are rejected at the check. A host reads a value as `lamlet::embed::Data`
+(`lamlet_doc::ir::attr`, or `attr_str` and `attr_f64`), and checks it against what the key means; the JSON IR
+writes it as JSON, and HTML's `data-` attribute writes a String as it is and any other value as its JSON.
+Attributes written in prose (`{#id key=value}`) are Strings.
 
 A region's value is content when its type is `Content`, which every function above returns. Content is a flat
 list of events (`#open`, `#close`, `#text`, `#leaf`), because Lamlet has no recursive types except `List`;

@@ -243,7 +243,7 @@ effect.
 ## 4. Types
 
 ```text
-τ ::= Unit | Bool | Int | Float | String | Type
+τ ::= Unit | Bool | Int | Float | String | Type | Data
     | List(τ)
     | Fn([τ1..τn], τ) ! ε            ε: capability set ⊆ {Static, Runtime}, or a variable
     | {l1: τ1, ..., ln: τn}         structural record, labels sorted
@@ -268,6 +268,15 @@ Inference is Hindley–Milner with let-generalization. Constraints are attached 
 the variable is bound. A generalized binding keeps its constraints, so every use instantiates them again.
 Constraints never depend on the *name* of the function they came from. A lambda that wraps `K::match`, or `.x`,
 or `K::add` has the same constrained type as the primitive.
+
+`Data` is the type of type-erased values: `K::toData : ∀a:Eq. Fn([a], Data)` keeps its argument and forgets
+its static type, so values of different types can share one List or one record field (an attribute list, a host
+payload). At run time `toData` is the identity; the value keeps its representation. `Eq` excludes functions and
+opaque values, so a `Data` value is always plain data, the form a host reads (`embed::Data`). `Data` satisfies
+`Eq` only: two `Data` values are equal when their values are structurally equal, and values of different
+representations (`{toData 1}` and `{toData 1.0}`) are unequal, not an error. Nothing in Lamlet inspects a `Data`
+value; it is for hosts. A native may take or return `Data`; a returned value must hold no function, native
+value, or non-finite Float.
 
 ### 4.1 Label functions
 
@@ -415,6 +424,7 @@ wrappers, and higher-order uses therefore behave identically.
 | `sqrt`, `sin`, `cos`, `exp`, `ln` | `Fn([Float],Float)` | Transcendental functions; implemented deterministically (only IEEE `+ − × ÷ √`), so every platform gets identical bits |
 | `fixed` | `Fn([Float,Int],String)` | Correctly rounded decimal rendering of binary64 |
 | `equal`, `less`, `hash` | `∀a:Eq` / `∀a:Ord` | Structural over every representation; no type-directed dispatch exists in the language |
+| `toData` | `∀a:Eq. Fn([a],Data)` | Forgets a static type (§4); Lamlet has no `Any` and no recursive types to write it |
 | `caseBool` | `Fn([Bool, Fn([],a)!e, Fn([],a)!e], a)!e` | Bool is a native representation and needs an eliminator |
 | `nil`, `cons`, `caseList` | List constructors and eliminator | List is the only recursive type; general recursive types are (future) |
 | `match` | see §4.1 | Variant eliminator |
@@ -424,7 +434,7 @@ wrappers, and higher-order uses therefore behave identically.
 | `debugString` | `∀a. Fn([a],String)` | Deterministic display of any value, for diagnostics |
 | `fail` | `∀a. Fn([String],a)` | Aborting is not expressible otherwise |
 | `unit` | `Unit` | The Unit value |
-| `intType`, `floatType`, `boolType`, `stringType`, `unitType`, `typeType` | `Type` | Base descriptors |
+| `intType`, `floatType`, `boolType`, `stringType`, `unitType`, `typeType`, `dataType` | `Type` | Base descriptors |
 | `listType` | `Fn([Type],Type)` | Type-descriptor construction |
 | `functionType` | `Fn([List(Type),Type],Type)` | Type-descriptor construction |
 | `recordType`, `variantType` | `Fn([List({name:String,type:Type})],Type)` | Type-descriptor construction; validates and sorts |
@@ -459,7 +469,8 @@ it is a language version change.
 | Variant | tag `7`, then the label as a body, then the payload |
 | Type | tag `8`, then the type's canonical display text as a body |
 
-A body is its byte length as a u64 LE, followed by the UTF-8 bytes. Functions and native values have no hash.
+A body is its byte length as a u64 LE, followed by the UTF-8 bytes. Functions and native values have no hash. A
+`Data` value has no encoding of its own: it hashes as the value it holds.
 
 ## 9. Natives and host capabilities
 

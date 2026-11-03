@@ -4,12 +4,24 @@ All notable changes to this project are listed here. Versions follow [Semantic V
 while the version is `0.x`, a minor release may break the API. The language version (`LANGUAGE_VERSION`) and
 bytecode version (`BYTECODE_VERSION`) are tracked separately from the crate version.
 
-## Unreleased
+## 0.4.0 (2026-11-03)
 
 Language version 0.3.0. Templates have one form, `f"{...}"`: documents using `[f "..."]` or `[latex "..."]` must
-be rewritten, and prose with `$f"{` now opens a region.
+be rewritten, and prose with `$f"{` now opens a region. Attribute values are typed data: the document IR's JSON
+is version 2.
 
 ### Added
+
+- `Data`, the type of type-erased values, and `toData`, `Eq A: Fn([A], Data)` (also `K::toData` and
+  `K::dataType`). `toData` keeps the value and forgets its static type, so values of different types can share
+  one List; a host reads them as `embed::Data`. `Data` is `Eq` only and cannot be inspected in Lamlet. Natives
+  may take and return `Data` (`embed::Data` is a `LamletType`). Language change: spec §4, rationale D14.
+- lamlet-doc: an element's attribute values are data of any type. `content`'s `Attr` is
+  `{key: String, value: Data}` and `{attr key value}` takes a value of any type with equality
+  (`{attr "at" {. x 1.0 y 2.0}}`); `{attr "k" "v"}` works as before. content's own attributes (`src`, `level`,
+  `seconds`, `display`, ...) are still Strings, and one that is not is an error at its region.
+- lamlet-doc: `ir::attr_str` (a String value) and `ir::attr_f64` (a Float, an Int, or a String that parses as a
+  number, since prose heading attributes `{#id k=v}` are text).
 
 - Templates are written `f"{Hello, I am "${.name p}", $age years old.}"`. The text runs, exactly as written, to
   the first `}"` outside a hole, with no escapes, so quotes, backslashes, and unbalanced brackets need none.
@@ -20,6 +32,11 @@ be rewritten, and prose with `$f"{` now opens a region.
 
 ### Changed
 
+- lamlet-doc: `ir::Attrs` is `Vec<(String, Data)>` and `ir::attr` returns `Option<&Data>`. Prose heading
+  attributes are `Data::String`.
+- lamlet-doc: the IR's JSON is version 2 (`"lamletDoc": 2`): attributes are `[[key, value], ...]` with each value
+  as JSON data (as a `value` node's `data`), not a String. HTML writes a String attribute in `data-*` as it is and
+  any other value as its JSON. Markdown and text ignore attributes, as before.
 - A template is folded to a constant only when every hole is a constant. A template whose holes used no local
   variables used to be evaluated during the check, so a hole calling a Runtime native (`${time}`) was a stage
   error.

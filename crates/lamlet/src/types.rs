@@ -16,6 +16,8 @@ pub enum TypeDesc {
     Float,
     String,
     Type,
+    /// A value of any comparable type whose static type was forgotten (`K::toData`), for hosts.
+    Data,
     List(Rc<TypeDesc>),
     /// Argument types, then the return type.
     Func(Vec<TypeDesc>, Rc<TypeDesc>),
@@ -88,6 +90,7 @@ impl fmt::Display for TypeDesc {
             TypeDesc::Float => write!(f, "Float"),
             TypeDesc::String => write!(f, "String"),
             TypeDesc::Type => write!(f, "Type"),
+            TypeDesc::Data => write!(f, "Data"),
             TypeDesc::List(t) => write!(f, "List({})", t),
             TypeDesc::Func(args, r) => {
                 write!(f, "Fn([")?;
@@ -145,6 +148,7 @@ pub enum Prim {
     Float,
     String,
     Type,
+    Data,
 }
 
 #[derive(Clone, Debug)]
@@ -174,6 +178,7 @@ pub const BOOL: Ty = Ty::Prim(Prim::Bool);
 pub const STRING: Ty = Ty::Prim(Prim::String);
 pub const UNIT: Ty = Ty::Prim(Prim::Unit);
 pub const TYPE: Ty = Ty::Prim(Prim::Type);
+pub const DATA: Ty = Ty::Prim(Prim::Data);
 
 pub fn list(t: Ty) -> Ty {
     Ty::List(Box::new(t))
@@ -365,6 +370,7 @@ impl TypeCtx {
             TypeDesc::Float => FLOAT,
             TypeDesc::String => STRING,
             TypeDesc::Type => TYPE,
+            TypeDesc::Data => DATA,
             TypeDesc::List(t) => list(self.from_desc(t, level)),
             TypeDesc::Func(args, r) => {
                 let params = args.iter().map(|a| self.from_desc(a, level)).collect();
@@ -389,6 +395,7 @@ impl TypeCtx {
                 Prim::Float => TypeDesc::Float,
                 Prim::String => TypeDesc::String,
                 Prim::Type => TypeDesc::Type,
+                Prim::Data => TypeDesc::Data,
             },
             Ty::List(t) => TypeDesc::List(Rc::new(self.to_desc(&t)?)),
             Ty::Fn(f) => TypeDesc::Func(f.params.iter().map(|p| self.to_desc(p)).collect::<Option<_>>()?, Rc::new(self.to_desc(&f.ret)?)),

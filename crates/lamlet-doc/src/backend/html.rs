@@ -8,7 +8,7 @@
 
 use crate::ir::{Attrs, Block, Doc, Inline};
 use crate::{written_form, Error, HTML};
-use lamlet::embed::Location;
+use lamlet::embed::{Data, Location};
 
 /// The document as an HTML fragment.
 pub fn write(doc: &Doc) -> Result<String, Error> {
@@ -62,7 +62,12 @@ fn attributes(name: &str, attrs: &Attrs) -> String {
     let mut s = format!(" class=\"{}\"", escape(name));
     for (k, v) in attrs {
         let key: String = k.chars().map(|c| if c.is_ascii_alphanumeric() || c == '-' { c.to_ascii_lowercase() } else { '-' }).collect();
-        s.push_str(&format!(" data-{}=\"{}\"", key, escape(v)));
+        // A String as it is; any other value as its JSON.
+        let v = match v {
+            Data::String(t) => t.clone(),
+            d => super::json::data(d),
+        };
+        s.push_str(&format!(" data-{}=\"{}\"", key, escape(&v)));
     }
     s
 }

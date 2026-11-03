@@ -6,8 +6,9 @@
 
 use lamlet::embed::{Data, Location};
 
-/// Attributes of an element: key and value pairs, in order.
-pub type Attrs = Vec<(String, String)>;
+/// Attributes of an element: key and value pairs, in order. A value is any plain data (`content`'s `attr` takes a
+/// value of any comparable type through `toData`); attributes written in prose (`{#id k=v}`) are Strings.
+pub type Attrs = Vec<(String, Data)>;
 
 /// A lowered document.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -90,7 +91,26 @@ impl Inline {
     }
 }
 
-/// A block's attribute by key.
-pub fn attr<'a>(attrs: &'a Attrs, key: &str) -> Option<&'a str> {
-    attrs.iter().find(|(k, _)| k == key).map(|(_, v)| v.as_str())
+/// An attribute's value by key.
+pub fn attr<'a>(attrs: &'a Attrs, key: &str) -> Option<&'a Data> {
+    attrs.iter().find(|(k, _)| k == key).map(|(_, v)| v)
+}
+
+/// An attribute's value by key, when it is a String.
+pub fn attr_str<'a>(attrs: &'a Attrs, key: &str) -> Option<&'a str> {
+    match attr(attrs, key) {
+        Some(Data::String(s)) => Some(s),
+        _ => None,
+    }
+}
+
+/// An attribute's value by key as a number: a Float, an Int, or a String that parses as a finite number (prose
+/// heading attributes are text).
+pub fn attr_f64(attrs: &Attrs, key: &str) -> Option<f64> {
+    match attr(attrs, key)? {
+        Data::Float(f) => Some(*f),
+        Data::Int(n) => Some(*n as f64),
+        Data::String(s) => s.trim().parse::<f64>().ok().filter(|x| x.is_finite()),
+        _ => None,
+    }
 }

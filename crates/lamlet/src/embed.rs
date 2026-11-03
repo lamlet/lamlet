@@ -934,6 +934,8 @@ pub enum TypeData {
     Float,
     String,
     Type,
+    /// A type-erased value (`K::toData`): any [`Data`].
+    Data,
     List(Box<TypeData>),
     Func(Vec<TypeData>, Box<TypeData>),
     Record(Vec<(String, TypeData)>),
@@ -1034,6 +1036,7 @@ impl TypeData {
             TypeDesc::Float => TypeData::Float,
             TypeDesc::String => TypeData::String,
             TypeDesc::Type => TypeData::Type,
+            TypeDesc::Data => TypeData::Data,
             TypeDesc::List(e) => TypeData::List(Box::new(TypeData::from_desc(e))),
             TypeDesc::Func(ps, r) => TypeData::Func(ps.iter().map(TypeData::from_desc).collect(), Box::new(TypeData::from_desc(r))),
             TypeDesc::Record(fs) => TypeData::Record(labeled(fs)),
@@ -1065,6 +1068,7 @@ impl TypeData {
             TypeData::Float => TypeDesc::Float,
             TypeData::String => TypeDesc::String,
             TypeData::Type => TypeDesc::Type,
+            TypeData::Data => TypeDesc::Data,
             TypeData::List(e) => TypeDesc::List(Rc::new(sub(e)?)),
             TypeData::Func(ps, r) => TypeDesc::Func(ps.iter().map(sub).collect::<Result<_, _>>()?, Rc::new(sub(r)?)),
             TypeData::Record(fs) => TypeDesc::Record(labeled(fs, "record field")?),
@@ -1137,6 +1141,12 @@ impl LamletType for String {
 impl<T: LamletType> LamletType for Vec<T> {
     fn lamlet_type() -> TypeDesc {
         TypeDesc::List(Rc::new(T::lamlet_type()))
+    }
+}
+/// A `Data` parameter or result: any plain value, whatever its Lamlet type was (`toData`).
+impl LamletType for Data {
+    fn lamlet_type() -> TypeDesc {
+        TypeDesc::Data
     }
 }
 impl<T: LamletType> LamletType for Option<T> {
@@ -1330,6 +1340,7 @@ fn type_expr(t: &TypeDesc, names: &HashMap<String, String>) -> String {
         TypeDesc::Float => "std::Float".into(),
         TypeDesc::String => "std::String".into(),
         TypeDesc::Type => "std::Type".into(),
+        TypeDesc::Data => "std::Data".into(),
         TypeDesc::List(e) => format!("{{std::List {}}}", type_expr(e, names)),
         TypeDesc::Func(ps, r) => {
             let ps: Vec<String> = ps.iter().map(|p| type_expr(p, names)).collect();

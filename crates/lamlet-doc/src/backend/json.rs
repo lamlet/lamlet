@@ -1,8 +1,8 @@
-//! The IR as JSON: `{"lamletDoc": 1, "blocks": [...]}`, the interface for other tools and for backends in other
+//! The IR as JSON: `{"lamletDoc": 2, "blocks": [...]}`, the interface for other tools and for backends in other
 //! languages. Written by hand, since the crate has no dependencies.
 //!
 //! Every node is an object with a `"type"` (`"paragraph"`, `"text"`, `"link"`, …) and the node's fields, named
-//! as in [`crate::ir`] in camel case. Attributes are `[[key, value], ...]`, in order. A position is
+//! as in [`crate::ir`] in camel case. Attributes are `[[key, value], ...]`, in order, each value as JSON data (below). A position is
 //! `{"file", "line", "column", "endLine", "endColumn"}`. A `value` node has its data as JSON (Unit is `null`, a
 //! variant `{"tag", "value"}`, a type `{"type": "written form"}`) and its written form as `"text"`.
 
@@ -11,7 +11,7 @@ use crate::{written_form, Error};
 use lamlet::embed::{Data, Location};
 
 /// The version of the JSON form, raised on incompatible changes.
-pub const VERSION: u32 = 1;
+pub const VERSION: u32 = 2;
 
 /// The document's IR as JSON, on one line.
 pub fn write(doc: &Doc) -> Result<String, Error> {
@@ -90,7 +90,7 @@ pub(crate) fn location(a: &Location) -> String {
 }
 
 fn attrs(a: &Attrs) -> String {
-    format!("[{}]", a.iter().map(|(k, v)| format!("[{},{}]", string(k), string(v))).collect::<Vec<_>>().join(","))
+    format!("[{}]", a.iter().map(|(k, v)| format!("[{},{}]", string(k), data(v))).collect::<Vec<_>>().join(","))
 }
 
 /// Data as JSON.

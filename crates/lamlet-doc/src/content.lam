@@ -10,9 +10,9 @@ $[Import* std]
 
 1. Types
 
-An attribute of an element: a key and its value as text.
+An attribute of an element: a key and its value, data of any type (std's `Data`), for the host to read.
 
-$[# Attr [% {Struct {' {Field "key" String} {Field "value" String}}}]]
+$[# Attr [% {Struct {' {Field "key" String} {Field "value" Data}}}]]
 
 An element's name and attributes.
 
@@ -28,7 +28,11 @@ $[# Content [% {List Event}]]
 
 2. Building blocks
 
-$[# {attr key value} {: {. key key value value} Attr}]
+An attribute: `{attr "mode" "fast"}`, `{attr "mix" 0.5}`, `{attr "at" {. x 1.0 y 2.0}}`. The value may be of any type
+with equality (no functions); its type is kept for the host, not checked against the key.
+
+$[# {attr key value} {: {. key key value {toData value}} Attr}]
+$[# {_sattr key value} {attr key {: value String}}]
 $[# {_el name attrs} {: {. name name attrs attrs} Element}]
 $[# {_open name attrs} {: {#open {_el name attrs}} Event}]
 $[# {_close name} {: {#close name} Event}]
@@ -58,22 +62,22 @@ $[# {strongOf body} {_wrap "strong" {'} body}]
 
 A link with a String label, or with content.
 
-$[# {link label href} {_wrap "link" {' {attr "href" href}} {text label}}]
-$[# {linkOf body href} {_wrap "link" {' {attr "href" href}} body}]
+$[# {link label href} {_wrap "link" {' {_sattr "href" href}} {text label}}]
+$[# {linkOf body href} {_wrap "link" {' {_sattr "href" href}} body}]
 
 An image, with its alternative text, and optionally a title.
 
-$[# {image src alt} {_leaf "image" {' {attr "src" src} {attr "alt" alt}}}]
-$[# {imageTitled src alt title} {_leaf "image" {' {attr "src" src} {attr "alt" alt} {attr "title" title}}}]
+$[# {image src alt} {_leaf "image" {' {_sattr "src" src} {_sattr "alt" alt}}}]
+$[# {imageTitled src alt title} {_leaf "image" {' {_sattr "src" src} {_sattr "alt" alt} {_sattr "title" title}}}]
 
 Code inside a line.
 
-$[# {code s} {_leaf "code" {' {attr "text" s}}}]
+$[# {code s} {_leaf "code" {' {_sattr "text" s}}}]
 
 A formula in TeX, inline or displayed.
 
-$[# {math tex} {_leaf "math" {' {attr "tex" tex}}}]
-$[# {displayMath tex} {_leaf "math" {' {attr "tex" tex} {attr "display" "true"}}}]
+$[# {math tex} {_leaf "math" {' {_sattr "tex" tex}}}]
+$[# {displayMath tex} {_leaf "math" {' {_sattr "tex" tex} {_sattr "display" "true"}}}]
 
 A line break.
 
@@ -82,13 +86,13 @@ $[# lineBreak [% {_leaf "break" {'}}]]
 Markup for one format, copied unescaped by that format's backend and refused by the others: inline, or as a
 block.
 
-$[# {raw format s} {_leaf "raw" {' {attr "format" format} {attr "text" s}}}]
-$[# {rawBlock format s} {_leaf "rawBlock" {' {attr "format" format} {attr "text" s}}}]
+$[# {raw format s} {_leaf "raw" {' {_sattr "format" format} {_sattr "text" s}}}]
+$[# {rawBlock format s} {_leaf "rawBlock" {' {_sattr "format" format} {_sattr "text" s}}}]
 
 A named span with attributes, for hosts: a class in HTML, a cue for a narrated document. Writers that do not know
 the name write only its content.
 
-$[# {span name attrs body} {_wrap "span" {cons {attr "name" name} attrs} body}]
+$[# {span name attrs body} {_wrap "span" {cons {_sattr "name" name} attrs} body}]
 
 4. Blocks
 
@@ -98,15 +102,15 @@ $[# {paragraph body} {_wrap "paragraph" {'} body}]
 
 A heading of level 1 to 6, from a String; `headingId` also gives it an id (a speech section, an HTML anchor).
 
-$[# {heading level s} {_wrap "heading" {' {attr "level" {str level}}} {text s}}]
-$[# {headingId level id s} {_wrap "heading" {' {attr "level" {str level}} {attr "id" id}} {text s}}]
-$[# {headingOf level id body} {_wrap "heading" {' {attr "level" {str level}} {attr "id" id}} body}]
+$[# {heading level s} {_wrap "heading" {' {_sattr "level" {str level}}} {text s}}]
+$[# {headingId level id s} {_wrap "heading" {' {_sattr "level" {str level}} {_sattr "id" id}} {text s}}]
+$[# {headingOf level id body} {_wrap "heading" {' {_sattr "level" {str level}} {_sattr "id" id}} body}]
 
 Lists of items, each item content.
 
 $[# {_items items} {flatten {map items {^ {c} {_wrap "item" {'} c}}}}]
 $[# {bullets items} {_wrap "list" {'} {_items items}}]
-$[# {numbered items} {_wrap "list" {' {attr "ordered" "true"}} {_items items}}]
+$[# {numbered items} {_wrap "list" {' {_sattr "ordered" "true"}} {_items items}}]
 
 Lists of Strings, as bullets or numbered.
 
@@ -122,22 +126,22 @@ $[# {table header rows} {tableOf {map header text} {map rows {^ {r} {map r text}
 
 A block of code in a language (`""` for none).
 
-$[# {codeBlock lang s} {_leaf "codeBlock" {' {attr "lang" lang} {attr "text" s}}}]
+$[# {codeBlock lang s} {_leaf "codeBlock" {' {_sattr "lang" lang} {_sattr "text" s}}}]
 
 A named group of blocks with attributes, for hosts, like `span` for inlines.
 
-$[# {group name attrs body} {_wrap "group" {cons {attr "name" name} attrs} body}]
+$[# {group name attrs body} {_wrap "group" {cons {_sattr "name" name} attrs} body}]
 
 5. Speech
 
 Shown as `shown` and spoken as `spoken`: a formula, a code name, an abbreviation.
 
-$[# {say shown spoken} {_wrap "say" {' {attr "spoken" spoken}} shown}]
+$[# {say shown spoken} {_wrap "say" {' {_sattr "spoken" spoken}} shown}]
 
 A named point between words, with attributes, that a speech host times to the next spoken word.
 
-$[# {anchor name attrs} {_leaf "anchor" {cons {attr "name" name} attrs}}]
+$[# {anchor name attrs} {_leaf "anchor" {cons {_sattr "name" name} attrs}}]
 
 Silence, in seconds.
 
-$[# {pause seconds} {_leaf "pause" {' {attr "seconds" {str seconds}}}}]
+$[# {pause seconds} {_leaf "pause" {' {_sattr "seconds" {str seconds}}}}]

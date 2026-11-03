@@ -105,6 +105,8 @@ Each entry: name, then its doc (which starts with its type when it has one). `_n
 - `String` — The Type of Unicode scalar sequences.
 - `Unit` — The Type whose only value is unit.
 - `Type` — The Type of Type values.
+- `Data` — The Type of type-erased values (toData): data of any comparable type, kept for the host to read. A Data value cannot be inspected in Lamlet; it can only be compared with =.
+- `toData` — Eq A: Fn([A], Data). Forgets the value's type, keeping the value, so values of different types can share one List or field. Functions and native values are rejected by the check.
 - `List` — Fn([Type], Type). The Type of lists of T.
 - `Fn` — Fn([List(Type), Type], Type). {Fn {' A B} R} is the Type of functions from A and B to R.
 - `Field` — Fn([String, Type], {name: String, type: Type}). A named member, for Struct and Variant.

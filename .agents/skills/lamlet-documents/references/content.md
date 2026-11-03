@@ -5,14 +5,14 @@ Each entry: name, then its doc (which starts with its type when it has one). `_n
 
 ## 1. Types
 
-- `Attr` : `Type` — An attribute of an element: a key and its value as text.
+- `Attr` : `Type` — An attribute of an element: a key and its value, data of any type (std's `Data`), for the host to read.
 - `Element` : `Type` — An element's name and attributes.
 - `Event` : `Type` — One event: the opening of an element, its closing (by name), text, or a leaf element with no children.
 - `Content` : `Type` — Content: a list of events. Lists of content join with `cat` (or std's `flatten`).
 
 ## 2. Building blocks
 
-- `attr` : `Fn([String, String], Attr)`
+- `attr` : `Fn([String, a:Eq], Attr)` — An attribute: `{attr "mode" "fast"}`, `{attr "mix" 0.5}`, `{attr "at" {. x 1.0 y 2.0}}`. The value may be of any type with equality (no functions); its type is kept for the host, not checked against the key.
 - `cat` : `Fn([List(Content)], Content)` — Content from pieces of content, in order.
 - `empty` : `Content` — Nothing.
 
