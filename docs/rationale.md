@@ -309,6 +309,28 @@ speed, though `μL. <nil: Unit, cons: {head: a, tail: L}>` now expresses it.
 functions. No recursive types in native signatures in v1: a host package would need a generated `[Type ...]`
 declaration.
 
+## D16. Code fences are verbatim prose
+
+**Decision.** The document scanner recognizes code fences (```` ``` ```` and `~~~` lines, as in CommonMark) and
+keeps everything in one as prose, exactly as written: no regions, and `$$` is two dollars. Parsed prose turns a
+fence into a code block. An unclosed fence is a diagnostic.
+
+**Why.** Code samples are full of dollars (shell, LaTeX, Lamlet itself), so a fence whose `$name` and `${...}`
+were regions made every sample an escaping exercise, and a document copied from Markdown changed meaning or
+failed. Parsed prose used to refuse fences and ask for `${codeBlock "lang" "..."}`, which is clumsy for code you
+write out yourself. Verbatim fences have to live in the scanner, because only the scanner decides what is a
+region; a document library could only refuse fences or evaluate the regions in them. Putting the rule in the core
+also makes it the same for every host, whatever it does with prose. `lamlet-doc` uses the core's
+`source::fence_open` and `fence_closes`, so the two cannot disagree about where a fence is.
+
+**Alternatives.** Interpolating fences (regions evaluated, `$$` for a dollar), like inline code spans: no core
+change, but every literal dollar in a sample needs doubling. A marker for an interpolating fence (```` ```sh $ ````)
+adds syntax for what `codeBlock` with a template already does.
+
+**Cost.** The core learns one piece of Markdown syntax. A region inside a fence is now text, so documents that
+computed values inside fences must move them to `codeBlock`. Inline code spans still hold regions, since a
+single backtick is too common in prose to make it verbatim.
+
 ## Known limitations
 
 - No mutual recursion (of functions or of recursive types), non-regular recursive types, polymorphic computed

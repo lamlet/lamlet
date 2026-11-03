@@ -186,10 +186,17 @@ fn parsed_prose_puts_regions_where_they_stand() {
     // A region inside code is its text; markup in a region's string is text, not markup.
     assert_eq!(h("\n`n = ${+ 1 2}` and ${text \"*not em*\"}"), "<p><code>n = 3</code> and *not em*</p>");
     assert_eq!(md("\n- a\n- b\n  - c\n\n1. x\n2. y"), "- a\n- b\n\n  - c\n\n1. x\n2. y");
-    // Code blocks are `codeBlock` regions; a fence is refused at its own line.
+    // A fence is verbatim: no regions, no markup, `$$` stays two dollars; it ends a paragraph.
     assert_eq!(h("\n${codeBlock \"\" \"*x*\"}"), "<pre><code>*x*</code></pre>");
-    let e = run("\nintro\n\n```\n*x*\n```", COMMONMARK, html::write).unwrap_err();
-    assert!(e.starts_with("t.lam:4:1: a fenced code block (``` or ~~~) is not Lamlet syntax"), "{e}");
+    assert_eq!(
+        h("\nintro\n```sh extra\necho $HOME ${+ 1 2} $$ *x*\n  <b>\n```\nafter"),
+        "<p>intro</p>\n<pre><code class=\"language-sh\">echo $HOME ${+ 1 2} $$ *x*\n  &lt;b&gt;</code></pre>\n<p>after</p>"
+    );
+    assert_eq!(md("\n~~~~\n```\n~~~\n~~~~"), "````\n```\n~~~\n````");
+    // In a list item, a fence loses the item's indentation and keeps its lines whatever their indentation.
+    assert_eq!(md("\n- a\n  ```lam\n  $[# x 1]\n\n    deeper\n  ```\n- b"), "- a\n\n  ```lam\n  $[# x 1]\n\n    deeper\n  ```\n- b");
+    let e = run("\n```\nnever closed", COMMONMARK, html::write).unwrap_err();
+    assert!(e.contains("unterminated code fence"), "{e}");
     assert_eq!(h("\n| a | b |\n|---|:-:|\n| 1 | `\\|` |"), "<table>\n<thead>\n<tr><th>a</th><th>b</th></tr>\n</thead>\n<tbody>\n<tr><td>1</td><td><code>|</code></td></tr>\n</tbody>\n</table>");
     assert_eq!(h("\n[a *b*](u) ![i](s.png \"t\") <https://x.y> \\*lit\\*"), "<p><a href=\"u\">a <em>b</em></a> <img src=\"s.png\" alt=\"i\" title=\"t\"> <a href=\"https://x.y\">https://x.y</a> *lit*</p>");
     assert_eq!(h("\nsnake_case_name and 2*3*4"), "<p>snake_case_name and 2<em>3</em>4</p>");

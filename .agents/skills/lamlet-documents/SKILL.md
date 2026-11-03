@@ -85,8 +85,9 @@ Rules for regions in parsed prose:
   becomes that block.
 - **Any other region is inline,** part of the text around it. A block-valued region inside a line is an error:
   `a region whose content is a block stands inside a line; put it on lines of its own`.
-- **No code fences.** ```` ``` ```` is Markdown, not Lamlet, and parsed prose rejects a fence line at its line.
-  Write `${codeBlock "toml" "..."}`. (In copied prose a fence is your markup and passes through.)
+- **Code fences are verbatim.** A ```` ``` ````/`~~~` fence is Lamlet syntax: nothing in it is a region and `$$`
+  stays `$$`, so samples need no escaping. Parsed prose makes it a code block; copied prose passes it through. For
+  a computed language or text, write `${codeBlock "sh" f"{echo $name}"}`. An unclosed fence is an error.
 
 Escaping: text from a region is escaped; prose never is, since you wrote it in the format. Markup from a region
 on purpose is `${raw "html" "<kbd>K</kbd>"}`: the HTML backend copies it, and the others refuse it with the
@@ -227,5 +228,5 @@ After changing `content.lam`, regenerate the reference with
 ## 8. Not available
 
 Don't write these expecting them to work: a LaTeX backend; block quotes, thematic breaks, setext headings,
-HTML, reference links, or indented code in parsed prose (they stay text); code fences in parsed prose (an
-error); the `--to speech` backend (it moved to `lamlet-present`).
+HTML, reference links, or indented code in parsed prose (they stay text); regions inside a code fence (they
+are text); the `--to speech` backend (it moved to `lamlet-present`).

@@ -541,6 +541,7 @@ bindings, produces no values, and is not a scope boundary.
 | `$;{...}`, `$;[...]` | A disabled region: inert, and not part of the displayed prose |
 | `$$` | A literal `$` in prose |
 | Any other `$` | Prose: `$50`, `$ {x}` |
+| A code fence (```` ``` ```` or `~~~` lines) | Verbatim prose: nothing in it is active |
 
 Scanning rules:
 
@@ -552,6 +553,12 @@ Scanning rules:
   like block comments inside code. Dollars and semicolons in the body have no special meaning.
 - **Strings are never re-scanned.** An evaluated String is data and never becomes code.
 - **Dollars in code.** Inside code, `$` is an error, except inside String literals and template holes.
+- **Code fences.** A line that starts (after any spaces or tabs) with three or more backticks or tildes opens a
+  fence; for backticks, the rest of the line holds no backtick, so ```` ```x``` ```` is inline text. The fence
+  runs to the next line made of at least as many of the same character and whitespace, and everything in it is
+  prose exactly as written: `$name`, `${...}`, and `$$` are text. A fence that never closes is a diagnostic,
+  since it would otherwise silently turn the rest of the document into prose. Fences are recognized only in
+  prose; inside code (a String, a template) they are ordinary characters.
 - **Lookups and punctuation.** A lookup takes a word identifier and its `::name` components. A following `.` is
   prose, so `I am $AGE.` reads `AGE`.
 

@@ -4,6 +4,17 @@ All notable changes to this project are listed here. Versions follow [Semantic V
 while the version is `0.x`, a minor release may break the API. The language version (`LANGUAGE_VERSION`) and
 bytecode version (`BYTECODE_VERSION`) are tracked separately from the crate version.
 
+## Unreleased
+
+### Changed
+
+- Code fences are verbatim prose. The scanner recognizes ```` ``` ````/`~~~` fences (CommonMark's rule) and keeps
+  everything in one as written: `$name`, `${...}`, and `$$` inside a fence are text. An unclosed fence is a
+  syntax error. A document that computed values inside a fence must move them to `codeBlock`. `source::fence_open`
+  and `source::fence_closes` expose the rule. Language change: spec §10, rationale D16.
+- lamlet-doc: parsed prose (`--prose commonmark`) turns a fence into a code block, with the info string's first
+  word as its language, inside list items too. It used to refuse fences.
+
 ## 0.4.0 (2026-11-03)
 
 Language version 0.3.0. Templates have one form, `f"{...}"`: documents using `[f "..."]` or `[latex "..."]` must

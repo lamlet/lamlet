@@ -646,11 +646,15 @@ fn document_convention() {
 
 #[test]
 fn escapes_and_comments() {
-    let src = "$[Import* std]\nThe example $${+ 1 2} is literal. $$[Import std] too. Unprefixed {+ 1 2} and [# x 3]. Costs $50 or $ {q}.\n```\n${+ 1 2}\n```";
+    let src = "$[Import* std]\nThe example $${+ 1 2} is literal. $$[Import std] too. Unprefixed {+ 1 2} and [# x 3]. Costs $50 or $ {q}.\n```\n${+ 1 2} $$x\n```\n${+ 1 2}";
     assert_eq!(eval(src), vec!["3"]);
     let doc = check(src).unwrap();
     match &parts(&doc)[1] {
-        Part::Text(text, _) => assert!(text.contains("The example ${+ 1 2} is literal. $[Import std] too.")),
+        Part::Text(text, _) => {
+            assert!(text.contains("The example ${+ 1 2} is literal. $[Import std] too."));
+            // A code fence is verbatim: its region is text and its `$$` stays two dollars.
+            assert!(text.ends_with("```\n${+ 1 2} $$x\n```\n"), "{text}");
+        }
         _ => panic!(),
     }
 }

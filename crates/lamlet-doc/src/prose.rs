@@ -5,13 +5,14 @@
 //! The subset:
 //!
 //! - **Blocks:** ATX headings (`## Title {#id key=value}`), paragraphs, bullet and ordered lists (nested by
-//!   indentation), and GitHub tables.
+//!   indentation), GitHub tables, and fenced code blocks (```` ``` ```` or `~~~`, with a language).
 //! - **Inlines:** `*emphasis*`, `**strong**` (and `_`/`__`), `` `code` ``, `[links](href)`, `![images](src
 //!   "title")`, `<autolinks>`, backslash escapes, and hard line breaks (two spaces or `\` before a newline).
 //!
-//! Code blocks come only from the `content` package's `codeBlock`: a fence (```` ``` ```` or `~~~`) is not Lamlet
-//! syntax, and a fence line in parsed prose is an error that says so. Not in the subset either (written as text):
-//! block quotes, thematic breaks, setext headings, HTML, reference links, and indented code blocks.
+//! A fence is Lamlet syntax: the scanner keeps it verbatim, so it holds no regions and `$$` in it is two dollars
+//! ([`lamlet::source::fence_open`] is the rule both use). A code block whose language or text is computed is the
+//! `content` package's `codeBlock`. Not in the subset (written as text): block quotes, thematic breaks, setext
+//! headings, HTML, reference links, and indented code blocks.
 //!
 //! While the prose is parsed, each region stands in it as one character of Unicode's private use area, so the
 //! parser never sees region values as markup.
@@ -20,6 +21,7 @@ use crate::content::Piece;
 use crate::ir::{Attrs, Block, Inline};
 use crate::{Error, COMMONMARK};
 use lamlet::embed::{Data, Location};
+use lamlet::source::{fence_closes, fence_open};
 use std::cell::RefCell;
 
 const FIRST_SLOT: u32 = 0xE000;
@@ -58,13 +60,6 @@ pub fn parse(pieces: Vec<Piece>) -> Result<Vec<Block>, Error> {
         }
     }
     let lines: Vec<&str> = src.split('\n').collect();
-    // Code blocks are `codeBlock` regions; a fence is not Lamlet syntax.
-    if let Some(i) = lines.iter().position(|l| is_fence(l)) {
-        return Err(Error::at(
-            lines_at.get(i).unwrap_or(&at),
-            "a fenced code block (``` or ~~~) is not Lamlet syntax: write the block as ${codeBlock \"lang\" \"code\"} (the `content` package)",
-        ));
-    }
     let lines: Vec<Line> = lines.iter().enumerate().map(|(i, l)| (*l, lines_at.get(i).cloned().flatten())).collect();
     let p = Parser { slots, at: RefCell::new(at) };
     p.blocks(&lines)
@@ -124,13 +119,6 @@ fn list_marker(line: &str) -> Option<(bool, usize)> {
         return None;
     }
     Some((ordered, ind + marker_len + spaces))
-}
-
-/// Whether a line opens a fenced code block (three or more backticks or tildes), which parsed prose refuses.
-fn is_fence(line: &str) -> bool {
-    let ind = indent(line);
-    let rest = &line[ind..];
-    ind <= 3 && (rest.starts_with("```") || rest.starts_with("~~~"))
 }
 
 fn heading(line: &str) -> Option<(u8, &str)> {
@@ -228,7 +216,7 @@ fn heading_attrs(text: &str) -> (&str, Option<String>, Attrs) {
 }
 
 fn starts_block(line: &str) -> bool {
-    heading(line).is_some() || list_marker(line).is_some_and(|(_, w)| line.len() > w || line.trim().len() > 1)
+    heading(line).is_some() || fence_open(line).is_some() || list_marker(line).is_some_and(|(_, w)| line.len() > w || line.trim().len() > 1)
 }
 
 impl Parser {
@@ -268,6 +256,24 @@ impl Parser {
             } else if let Some(b) = self.block_slot(line) {
                 out.push(b);
                 i += 1;
+            } else if let Some((fence, run)) = fence_open(line) {
+                // The scanner kept the fence verbatim; its lines lose the opening line's indentation.
+                let rest = line.trim_start_matches([' ', '\t']);
+                let ind = line.len() - rest.len();
+                let lang = rest.trim_start_matches(fence as char).split_whitespace().next().unwrap_or("").to_string();
+                let mut body = Vec::new();
+                i += 1;
+                while i < lines.len() && !fence_closes(lines[i].0, fence, run) {
+                    let l = lines[i].0;
+                    body.push(&l[(l.len() - l.trim_start_matches([' ', '\t']).len()).min(ind)..]);
+                    i += 1;
+                }
+                i += 1;
+                let text = body.join("\n");
+                if text.chars().any(is_slot) {
+                    return Err(Error::at(&self.here(), "a region inside a code fence (the scanner keeps fences verbatim)"));
+                }
+                out.push(Block::CodeBlock { lang, text, at: self.here() });
             } else if let Some((level, text)) = heading(line) {
                 let (title, id, attrs) = heading_attrs(text);
                 out.push(Block::Heading { level, id, attrs, inlines: self.inlines(title)? });
@@ -313,9 +319,19 @@ impl Parser {
             }
             let first = lines[i].0.get(width..).unwrap_or("");
             let mut body: Vec<Line> = vec![(first, lines[i].1.clone())];
+            // A fence open in the item: its lines belong to the item whatever their indentation.
+            let mut fence = fence_open(first);
             i += 1;
             while i < lines.len() {
                 let (l, at) = (lines[i].0, &lines[i].1);
+                if let Some((ch, run)) = fence {
+                    body.push((&l[indent(l).min(width)..], at.clone()));
+                    if fence_closes(l, ch, run) {
+                        fence = None;
+                    }
+                    i += 1;
+                    continue;
+                }
                 if l.trim().is_empty() {
                     // A blank line continues the item only if indented content follows.
                     let next = lines[i + 1..].iter().find(|l| !l.0.trim().is_empty());
@@ -328,6 +344,7 @@ impl Parser {
                 }
                 if indent(l) >= width {
                     body.push((&l[width..], at.clone()));
+                    fence = fence_open(&l[width..]);
                 } else if list_marker(l).is_none() && !starts_block(l) && body.last().is_some_and(|b| !b.0.trim().is_empty()) {
                     body.push((l.trim_start(), at.clone())); // a lazy continuation of the paragraph
                 } else {

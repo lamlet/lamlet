@@ -12,7 +12,8 @@ ${+
   2}
 expect: 3
 ```
-${* 2 3}
+A fence is verbatim prose: ${* 2 3}, $größe, $$, and ${unbalanced are inert.
 ```
+${* 2 3}
 expect: 6
 The document may end with a lone dollar $

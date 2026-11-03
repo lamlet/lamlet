@@ -1,7 +1,8 @@
 //! Source files, spans, diagnostics, and the document region scanner.
 //!
 //! Only `$name`, `${...}`, and `$[...]` are active. Everything else is ignored text that is retained with its
-//! span so a host can present it. `$$` is an escaped literal dollar.
+//! span so a host can present it. `$$` is an escaped literal dollar. A code fence (a line of three or more
+//! backticks or tildes, up to a closing line) is verbatim prose: nothing in it is active, `$$` included.
 
 use std::fmt;
 
@@ -289,6 +290,22 @@ pub fn scan_document(file: u32, text: &str) -> DResult<Vec<Segment>> {
     };
 
     while i < text.len() {
+        if i == 0 || bytes[i - 1] == b'\n' {
+            if let Some((fence, run)) = fence_open(line_at(text, i)) {
+                let end = fence_end(text, i, fence, run).ok_or_else(|| {
+                    let open = line_at(text, i);
+                    let c = fence as char;
+                    Diagnostic::new(
+                        DiagKind::Syntax,
+                        format!("unterminated code fence: close it with a line of {run} or more `{c}` (everything in a fence is verbatim prose)"),
+                        Some(Span::new(file, i, i + open.len())),
+                    )
+                })?;
+                display.push_str(&text[i..end]);
+                i = end;
+                continue;
+            }
+        }
         if bytes[i] == b'$' {
             let next = text[i + 1..].chars().next();
             match next {
@@ -353,6 +370,43 @@ pub fn scan_document(file: u32, text: &str) -> DResult<Vec<Segment>> {
     }
     flush(&mut segments, &mut display, text_start, i);
     Ok(segments)
+}
+
+/// The line of `text` that starts at `start`, without its newline.
+fn line_at(text: &str, start: usize) -> &str {
+    let rest = &text[start..];
+    &rest[..rest.find('\n').unwrap_or(rest.len())]
+}
+
+/// Whether `line` opens a code fence: optional indentation, then three or more backticks or tildes. A backtick
+/// fence's info string (the rest of the line) holds no backtick, so ```` ```x``` ```` is inline code, not a
+/// fence. Returns the fence character and the length of its run.
+pub fn fence_open(line: &str) -> Option<(u8, usize)> {
+    let rest = line.trim_start_matches([' ', '\t']);
+    let fence = *rest.as_bytes().first().filter(|b| matches!(b, b'`' | b'~'))?;
+    let run = rest.bytes().take_while(|b| *b == fence).count();
+    (run >= 3 && !(fence == b'`' && rest[run..].contains('`'))).then_some((fence, run))
+}
+
+/// Whether `line` closes a fence opened by `run` `fence` characters: optional indentation, at least `run` of
+/// them, and nothing else but whitespace.
+pub fn fence_closes(line: &str, fence: u8, run: usize) -> bool {
+    let rest = line.trim_start_matches([' ', '\t']);
+    let n = rest.bytes().take_while(|b| *b == fence).count();
+    n >= run && rest[n..].trim().is_empty()
+}
+
+/// End (exclusive, before its newline) of the closing line of a fence whose opening line starts at `start`.
+fn fence_end(text: &str, start: usize, fence: u8, run: usize) -> Option<usize> {
+    let mut at = start + line_at(text, start).len();
+    while at < text.len() {
+        let line = line_at(text, at + 1);
+        at += 1 + line.len();
+        if fence_closes(line, fence, run) {
+            return Some(at);
+        }
+    }
+    None
 }
 
 /// Consume a word identifier (hyphens allowed between word characters) followed by `::component`s.
@@ -610,6 +664,25 @@ mod tests {
     #[test]
     fn qualified_lookup_stops_at_sentence_dot() {
         assert_eq!(kinds("$pn::content. $AGE-years $a- $p.name"), vec!["Lookup($pn::content)", "T(. )", "Lookup($AGE-years)", "T( )", "Lookup($a)", "T(- )", "Lookup($p)", "T(.name)"]);
+    }
+
+    #[test]
+    fn code_fences_are_verbatim_prose() {
+        assert_eq!(
+            kinds("a $x\n```sh $y\necho $HOME ${q} $$ $[z]\n  ````\n$w"),
+            vec!["T(a )", "Lookup($x)", "T(\n```sh $y\necho $HOME ${q} $$ $[z]\n  ````\n)", "Lookup($w)"]
+        );
+        // Tildes, a longer opening run, and a shorter run inside that does not close it.
+        assert_eq!(kinds("~~~~\n~~~\n$x\n~~~~"), vec!["T(~~~~\n~~~\n$x\n~~~~)"]);
+        // Not fences: inline code with backticks after the run, a run mid-line, and two backticks.
+        assert_eq!(kinds("```a``` $x"), vec!["T(```a``` )", "Lookup($x)"]);
+        assert_eq!(kinds("see ``` $x"), vec!["T(see ``` )", "Lookup($x)"]);
+        assert_eq!(kinds("`` $x"), vec!["T(`` )", "Lookup($x)"]);
+        // A fence inside code is not prose.
+        assert_eq!(kinds("${\"\n```\"}\n$x"), vec!["Brace(${\"\n```\"})", "T(\n)", "Lookup($x)"]);
+        let err = scan_document(0, "text\n```\n$x\n``").unwrap_err();
+        assert!(err.message.starts_with("unterminated code fence: close it with a line of 3 or more `"), "{}", err.message);
+        assert_eq!((err.span.unwrap().start, err.span.unwrap().end), (5, 8));
     }
 
     #[test]

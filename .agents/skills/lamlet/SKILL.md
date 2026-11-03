@@ -118,6 +118,7 @@ A `.lam` file is a document (spec §10). Only `$`-spellings are active:
 | `$f"{…}"` | a template as a region: `I am $f"{${.age p} years}" old` |
 | `$;{…}`, `$;[…]` | a disabled region: inert text, dropped from the output |
 | `$$` | a literal `$`; any other `$` not followed by a name, `{`, or `[` is prose (`$5`, `$ {x}`) |
+| ```` ``` ```` / `~~~` fence | verbatim prose: no regions inside, `$$` stays `$$`; an unclosed fence is an error |
 
 - Once `${` or `$[` starts, the scanner commits: an unterminated region is an error, never prose.
 - Inside code, `$` is an error except in Strings and template holes.
