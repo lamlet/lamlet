@@ -32,7 +32,7 @@ pub trait Resolver {
 pub const CORE_PACKAGE: &str = "K";
 
 /// The embedded standard library source.
-pub const STD_SOURCE: &str = include_str!("../../../std/std.lam");
+pub const STD_SOURCE: &str = include_str!("../std/std.lam");
 
 pub fn std_package() -> PackageSource {
     PackageSource {

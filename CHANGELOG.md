@@ -4,6 +4,14 @@ All notable changes to this project are listed here. Versions follow [Semantic V
 while the version is `0.x`, a minor release may break the API. The language version (`LANGUAGE_VERSION`) and
 bytecode version (`BYTECODE_VERSION`) are tracked separately from the crate version.
 
+## 0.3.1 (2026-11-02)
+
+### Fixed
+
+- `lamlet` builds when vendored or packaged on its own. Its standard library was read from outside the crate's
+  directory (`std/std.lam` at the repository root), which `cargo vendor` and `cargo package` do not copy, so a
+  host that vendors Lamlet from git could not build it offline. The file is now `crates/lamlet/std/std.lam`.
+
 ## 0.3.0 (2026-11-02)
 
 Language version 0.2.0. Documents written for 0.1.0 keep working, except one that uses `λ` as a name.

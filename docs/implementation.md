@@ -18,7 +18,7 @@ The library has no dependencies. The CLI and the presentation adapter use `serde
 | `builtins.rs` | The `K` table (each entry has a name, scheme, arity, and implementation), label functions, deterministic math, hash |
 | `host.rs`, `package.rs` | Native registry, host context, resolver, the embedded std |
 | `embed.rs` | The embedding surface for hosts: engine, documents, instances, typed natives, `Data` (see `docs/embedding.md`) |
-| `std/std.lam` | The standard library, written in Lamlet |
+| `crates/lamlet/std/std.lam` | The standard library, written in Lamlet |
 
 ## Pipeline
 

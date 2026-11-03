@@ -178,7 +178,7 @@ evaluation. An ordinary function receiving thunks can provide conditional behavi
 to a function that always returns `7`?
 
 **Read afterward:** [specification §3](spec.md#3-core-calculus), plus `!if` and `choose` in
-[`std.lam`](../std/std.lam).
+[`std.lam`](../crates/lamlet/std/std.lam).
 
 ## 5. Type systems and soundness
 

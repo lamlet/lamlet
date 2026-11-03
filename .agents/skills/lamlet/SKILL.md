@@ -3,7 +3,7 @@ name: lamlet
 description: >-
   Write, read, debug, and extend Lamlet, the typed functional language embedded in text documents (.lam files;
   this repository's crates/lamlet). Use this skill whenever you work with .lam files, `$[...]`/`${...}` document
-  regions, the Lamlet standard library (std/std.lam), the K primitives, Lamlet macros, the lamlet CLI, or embedding
+  regions, the Lamlet standard library (crates/lamlet/std/std.lam), the K primitives, Lamlet macros, the lamlet CLI, or embedding
   Lamlet from Rust.
 ---
 
@@ -309,7 +309,7 @@ Display formats used in `expect:` lines:
 
 ## 9. Extending Lamlet
 
-- **A library function** goes in `std/std.lam`:
+- **A library function** goes in `crates/lamlet/std/std.lam`:
   - Write a doc paragraph directly above the definition, starting with its type, e.g.
     `Fn([List(A)], Int). ...`.
   - Define it before any use (source order).
@@ -333,7 +333,7 @@ Display formats used in `expect:` lines:
 | `docs/quick-start.md` | Tutorial |
 | `docs/host.md` | The host boundary |
 | `docs/rationale.md` | Why things are the way they are |
-| `std/std.lam` | The standard library source; also the best style reference |
+| `crates/lamlet/std/std.lam` | The standard library source; also the best style reference |
 | `references/std.md` | Every std export with its type (generated) |
 | `references/examples.lam` | Verified idioms |
 | `references/errors.md` | Diagnostics, and their fixes |

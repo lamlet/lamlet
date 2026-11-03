@@ -319,7 +319,7 @@ Two wildcard imports that define the same name are an error, not a silent shadow
 
 Every module can also see `K`, the built-in primitives: `K::add`, `K::caseList`, `K::match`, ... Each is an
 ordinary function with an ordinary type, so you can alias it, wrap it, or pass it around freely. Everything in
-`std/std.lam` is plain Lamlet over `K`, and is worth reading as a tour of idiomatic code.
+`crates/lamlet/std/std.lam` is plain Lamlet over `K`, and is worth reading as a tour of idiomatic code.
 
 ## 10. Common pitfalls
 
@@ -340,6 +340,6 @@ ordinary function with an ordinary type, so you can alias it, wrap it, or pass i
 ## 11. Where to go next
 
 - [spec.md](spec.md): the precise semantics, the primitive list, and the staging rules
-- `std/std.lam`: the whole standard library, in Lamlet
+- `crates/lamlet/std/std.lam`: the whole standard library, in Lamlet
 - `tests/fixtures/*.lam`: small documents that state their expected results
 - [host.md](host.md): the contract between Lamlet and a host application
