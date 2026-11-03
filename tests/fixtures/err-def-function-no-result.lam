@@ -1,0 +1,3 @@
+$[# {f x} [# y 1]]
+A function body ends with a result expression.
+expect-error: syntax: the definition of `f` needs a result expression

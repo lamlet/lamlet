@@ -1,6 +1,6 @@
 Lists: empty-list typing, nesting, folds, and set-like operations.
 $[Import* std]
-${: {flatten {'}} [% {List Int}]}
+${: {flatten {'}} {List Int}}
 expect: []
 ${tail {' 1}} ${contains {'} 1} ${length {'}}
 expect: []

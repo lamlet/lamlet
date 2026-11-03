@@ -10,7 +10,7 @@ src = (root / "std" / "std.lam").read_text()
 out = ["# std reference (generated from std/std.lam — do not edit by hand)", "",
        "Each entry: name, then its doc (which starts with its type). `_names` are private and omitted.", ""]
 doc = []
-decl = re.compile(r"^\$\[(?:# (\S+)|Macro (!\S+)|Native (\S+))")
+decl = re.compile(r"^\$\[(?:# \{?([^\s{}]+)|Macro (!\S+)|Native (\S+))")
 for line in src.splitlines():
     m = decl.match(line)
     if m:

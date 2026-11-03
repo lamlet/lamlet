@@ -1,0 +1,26 @@
+$[Import* std]
+A function head in place of a name defines a function, which may call itself.
+$[# {fact n} {!if {= n 0} 1 {* n {fact {- n 1}}}}]
+${fact 5}
+expect: 120
+Its body may start with declarations; a zero-parameter head defines a thunk.
+$[# {hyp a b} [# aa {* a a} bb {* b b}] {sqrt {+ aa bb}}]
+$[# {answer} 42]
+${hyp 3.0 4.0} ${answer}
+expect: 5.0
+expect: 42
+One declaration holds several bindings, in order; each sees the ones before it.
+$[# base 10  {addBase x} {+ x base}  twelve {addBase 2}]
+$twelve
+expect: 12
+Defined functions generalize like any binding.
+$[# {same x} x]
+${pair {same 1} {same "a"}}
+expect: {first: 1, second: "a"}
+Local definitions work in lambda bodies too.
+${{^ {n} [# {go i acc} {!if {= i 0} acc {go {- i 1} {+ acc i}}}] {go n 0}} 100}
+expect: 5050
+In a definition the name is the function itself; a plain binding's expression sees the outer name instead.
+$[# {scale x} {* x 10}]
+${{^ {y} [# scale {^ {x} {+ {scale x} 1}}] {scale y}} 1}
+expect: 11

@@ -1,0 +1,5 @@
+$[Import* std]
+$[Macro !bad {{x y} {... x y}}]
+${!bad 1 2}
+A splice group is spliced into a list, so it cannot be the whole template.
+expect-error: syntax: a splice group `{... }` must be an element of a list

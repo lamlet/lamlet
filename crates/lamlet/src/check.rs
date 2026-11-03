@@ -399,7 +399,7 @@ pub fn check_module(s: &mut Session, file: u32, mode: ModuleMode, name: &str) ->
     for (si, seg) in segments.iter().enumerate() {
         if let Segment::Region { kind, span, inner } = seg {
             let mut item = syntax::parse_region(file, *kind, &text[inner.start as usize..inner.end as usize], inner.start as usize)?;
-            if let Item::Decl(d) = &mut item {
+            if let Some(d) = match &mut item { Item::Decls(ds) => ds.first_mut(), _ => None } {
                 if let Some((_, slot)) = d.doc_slot() {
                     if slot.is_none() {
                         *slot = crate::source::preceding_doc(&segments, si);
@@ -548,32 +548,17 @@ impl<'s> Checker<'s> {
             doc: None,
         };
         match item {
-            Item::Decl(mut d) => {
+            Item::Decls(mut ds) => {
                 info.is_declaration = true;
-                if let Some((name, slot)) = d.doc_slot() {
+                // A region with several declarations reports (and documents) the first.
+                if let Some((name, slot)) = ds.first_mut().and_then(|d| d.doc_slot()) {
                     info.declares = Some(syntax::base_name(name).to_string());
                     info.doc = slot.clone();
                 }
-                let out = self.decl(&d, true)?;
-                self.check_runtime_effect(span)?;
-                if let DeclOut::Bind { name, scheme, core, def, span: dspan } = out {
-                    let origin = self.origin(dspan);
-                    let access = match self.mode {
-                        ModuleMode::Document => {
-                            let id = self.s.fresh_local(&name);
-                            steps.push(Step::Bind(id, core, dspan));
-                            Access::Local(id)
-                        }
-                        ModuleMode::Package => {
-                            let g = self.s.n_globals;
-                            self.s.n_globals += 1;
-                            steps.push(Step::SetGlobal(g, core, dspan));
-                            Access::Global(g)
-                        }
-                    };
-                    self.bind(&name, Binding::Value { def, scheme, access, origin }, dspan)?;
+                for mut d in ds {
+                    self.top_decl(&mut d, steps)?;
+                    self.check_runtime_effect(span)?;
                 }
-                self.record_doc(&mut d);
             }
             Item::Expr(e) => {
                 let (t, c) = self.expr(&e)?;
@@ -591,6 +576,29 @@ impl<'s> Checker<'s> {
             }
         }
         Ok(info)
+    }
+
+    fn top_decl(&mut self, d: &mut Decl, steps: &mut Vec<Step>) -> CheckResult<()> {
+        let out = self.decl(d, true)?;
+        if let DeclOut::Bind { name, scheme, core, def, span: dspan } = out {
+            let origin = self.origin(dspan);
+            let access = match self.mode {
+                ModuleMode::Document => {
+                    let id = self.s.fresh_local(&name);
+                    steps.push(Step::Bind(id, core, dspan));
+                    Access::Local(id)
+                }
+                ModuleMode::Package => {
+                    let g = self.s.n_globals;
+                    self.s.n_globals += 1;
+                    steps.push(Step::SetGlobal(g, core, dspan));
+                    Access::Global(g)
+                }
+            };
+            self.bind(&name, Binding::Value { def, scheme, access, origin }, dspan)?;
+        }
+        self.record_doc(d);
+        Ok(())
     }
 
     fn check_runtime_effect(&mut self, span: Span) -> CheckResult<()> {
@@ -844,16 +852,14 @@ impl<'s> Checker<'s> {
     }
 
     /// A Type argument that must already be static (a Type name, literal binding, or `[% ...]`).
+    /// A Type operand that can only be static (an ascription's type, a native's signature): evaluated at compile
+    /// time, as if written `[% T]`, so it may use only static bindings.
     fn static_type(&mut self, e: &Expr) -> CheckResult<TypeDesc> {
-        let (t, c) = self.expr(e)?;
+        let (t, c) = self.check_static_operand(e)?;
         self.unify_at(&t, &TYPE, e.span(), "expected a Type")?;
-        match c {
-            Core::Const(Value::Type(d)) => Ok((*d).clone()),
-            _ => Err(derr(
-                DiagKind::Stage,
-                "this Type must be statically known: use a Type name or compute it with [% ...]",
-                e.span(),
-            )),
+        match self.s.eval_static(&c, e.span())? {
+            Value::Type(d) => Ok((*d).clone()),
+            _ => unreachable!("a static operand of type Type evaluates to a Type"),
         }
     }
 

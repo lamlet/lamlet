@@ -1,0 +1,4 @@
+$[Import* std]
+A clause is `{alt x body}`; one without a body is reported against `!case` itself.
+${!case {#circle 2.0} {circle r} {rect wh 0.0}}
+expect-error: syntax: no clause of `!case` matches this use

@@ -6,7 +6,7 @@ $[Import* std]
 
 Functions, exact arity, explicit currying, first-class operators.
 $[# square {^ {x} {* x x}}]
-$[# adder {^ {n} {^ {x} {+ x n}}}]
+$[# {adder n} {^ {x} {+ x n}}]
 ${square 7} ${{adder 10} 5} ${map {' 1 2 3} {adder 1}} ${fold {' 1 2 3 4} 0 +}
 expect: 49
 expect: 15
@@ -18,10 +18,11 @@ ${{^ {x} [# y {* x 2}] [# z {+ y 1}] z} 5} ${{^ {} 42}}
 expect: 11
 expect: 42
 
-Recursion needs a named lambda; tail calls are constant space.
-$[# fact {^ fact {n} {!if {= n 0} 1 {* n {fact {- n 1}}}}}]
+Function definitions [# {f params} body] may recurse (a plain binding cannot); tail calls are constant space.
+One declaration may hold several bindings.
+$[# {fact n} {!if {= n 0} 1 {* n {fact {- n 1}}}}  ten 10]
 $[# sumTo {^ loop {n acc} {!if {= n 0} acc {loop {- n 1} {+ acc n}}}}]
-${fact 10} ${sumTo 100000 0}
+${fact ten} ${sumTo 100000 0}
 expect: 3628800
 expect: 5000050000
 
@@ -35,12 +36,14 @@ expect: {age: 37, name: "Ada"}
 expect: 36
 expect: 3
 
-Variants: #tag to build, match with a record of handlers (one per alternative).
+Variants: #tag to build, match with a record of handlers (one per alternative), or !case with one clause each.
 $[# area {^ {s} {match s {. circle {^ {r} {* 3.0 {* r r}}} rect {^ {wh} {* {.w wh} {.h wh}}}}}}]
-${area {#circle 1.0}} ${area {#rect {. w 2.0 h 3.0}}} ${#hello 1}
+$[# {perimeter s} {!case s {circle r {* 6.0 r}} {rect wh {* 2.0 {+ {.w wh} {.h wh}}}}}]
+${area {#circle 1.0}} ${area {#rect {. w 2.0 h 3.0}}} ${#hello 1} ${perimeter {#rect {. w 2.0 h 3.0}}}
 expect: 3.0
 expect: 6.0
 expect: #hello(1)
+expect: 10.0
 
 Options and pairs are ordinary std data.
 ${withDefault {some 3} 0} ${withDefault none 0} ${caseOption {some 2} {^ {} "none"} str} ${pair 1 "a"}
@@ -79,7 +82,7 @@ expect: 5
 
 Types are values; checking positions need static ones.
 $[# Person [% {Struct {' {Field "name" String} {Field "age" Int}}}]]
-$[# addInts {: {^ {a b} {+ a b}} [% {Fn {' Int Int} Int}]}]
+$[# addInts {: {^ {a b} {+ a b}} {Fn {' Int Int} Int}}]
 ${.age {: p Person}} ${addInts 2 3} $[% {Option Int}]
 expect: 36
 expect: 5

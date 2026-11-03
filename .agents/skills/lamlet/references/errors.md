@@ -23,7 +23,7 @@ often give the fix.
 | `{std.map ...}` (a dot instead of `::`) | ``name error: `std` is a package namespace, not a value (an export is written `std::name`)`` | `std::map` |
 | `[# x 1] [# x 2]` in one scope | ``name error: `x` is already bound in this scope`` | Rename the binding, or shadow it in an inner scope |
 | `[# b {+ 1 2}] [% b]` | ``stage error: a static expression cannot use the runtime binding `b` `` | Stage the definition: `[# b [% {+ 1 2}]]` |
-| `{: 1 {List Int}}` | `stage error: this Type must be statically known: use a Type name or compute it with [% ...]` | `{: 1 [% {List Int}]}`, or bind `[# T [% ...]]` |
+| `[# T {List Int}] {: xs T}` | ``stage error: a static expression cannot use the runtime binding `T` `` | `[# T [% {List Int}]]`, or write the type in place: `{: xs {List Int}}` |
 | A Runtime native inside `[% ...]` | `stage error: ... requires Runtime capabilities ...` | Call it at runtime, or use a Pure or Static native |
 | `[f "${str "x"}"]` | ``syntax error: a `$` hole in a template cannot contain a String literal`` | Bind the String first: `[# s "x"] [f "$s"]` |
 | `{1.+ 2}` | ``syntax error: a method name after `.` must be a word identifier`` | `{+ 1 2}` |

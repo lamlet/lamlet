@@ -49,6 +49,14 @@ ${square 7}                       ;; 49
 ${{^ {} 42}}                      ;; a zero-argument function, called with {f}
 ```
 
+Defining a named function is common enough to have a shorter form: put the call shape where the name goes.
+
+```text
+$[# {cube x} {* x {square x}}]    ;; the same as [# cube {^ cube {x} {* x {square x}}}]
+$[# two 2  {twice f x} {f {f x}}] ;; one [# ...] may hold several bindings, in order
+${twice cube two}                 ;; 512
+```
+
 Lambdas have an **exact arity**. There is no automatic currying or partial application, so `{+ 1}` is a type
 error ("expects 2 arguments, but 1 were given"). Curry explicitly by returning a lambda:
 
@@ -82,25 +90,34 @@ ${{^ {x}
     [# y {* x 2}]
     [# z {+ y 1}]
     z} 5}                         ;; 11
+${{^ {x} [# y {* x 2} z {+ y 1}] z} 5}   ;; the same, with both bindings in one declaration
 ```
+
+A function definition's body may have declarations too: `[# {f x} [# y {* x 2}] {+ y 1}]`. Its body ends at
+its first expression, where the next binding (if any) starts.
 
 Bindings are immutable and lexically scoped, and a binding generalizes as in ML's `let`. Rebinding a name in
 the same scope is an error; shadowing it in an inner scope is fine.
 
 ### Recursion
 
-A plain binding cannot see itself: `[# f {^ {n} {f n}}]` reports "unknown name `f`". To recurse, give the
-lambda a name after `^`:
+A function defined with `[# {f params...} body]` can call itself:
 
 ```text
-$[# fact {^ fact {n} {!if {= n 0} 1 {* n {fact {- n 1}}}}}]
+$[# {fact n} {!if {= n 0} 1 {* n {fact {- n 1}}}}]
 ${fact 10}                        ;; 3628800
+```
 
+That form is short for a lambda with a name after `^`, which names the function inside its own body. Write it
+directly for a recursive lambda that is not bound, or whose inner name differs:
+
+```text
 $[# sumTo {^ loop {n acc} {!if {= n 0} acc {loop {- n 1} {+ acc n}}}}]
 ${sumTo 100000 0}                 ;; 5000050000, and tail calls run in constant space
 ```
 
-The name is local to the lambda. Recursion is monomorphic inside the body, and there is no mutual recursion.
+A plain binding cannot see itself: `[# f {^ {n} {f n}}]` reports "unknown name `f`". The name after `^` is
+local to the lambda. Recursion is monomorphic inside the body, and there is no mutual recursion.
 
 ## 3. Values and types
 
@@ -125,10 +142,11 @@ ${+ 1 2 3}    ;; type error: this function expects 2 arguments, but 3 were given
 ${+ 1 2.0}    ;; type error: type mismatch: `Int` versus `Float`
 ```
 
-Types are inferred; you rarely write one. To check an expression against a type, use `{: e T}`:
+Types are inferred; you rarely write one. To check an expression against a type, use `{: e T}`. The type is
+computed at compile time, so it may only use static names (§7):
 
 ```text
-$[# addInts {: {^ {a b} {+ a b}} [% {Fn {' Int Int} Int}]}]
+$[# addInts {: {^ {a b} {+ a b}} {Fn {' Int Int} Int}}]
 ${addInts 2 3}                    ;; 5
 ```
 
@@ -159,7 +177,12 @@ ${area {#rect {. w 2.0 h 3.0}}}   ;; 6.0
 ```
 
 The handlers determine the variant type, and they must cover it exactly; a missing or extra case is a type
-error.
+error. The std macro `!case` writes the same thing with one clause per alternative, each naming its payload:
+
+```text
+$[# area {^ {s} {!case s {circle r {* 3.14 {* r r}}}
+                         {rect wh {* {.w wh} {.h wh}}}}}]
+```
 
 Options and pairs are not built in. They are ordinary definitions in std, made from these two forms:
 
@@ -218,6 +241,14 @@ $[Macro !unless {{c a b} {!if c b a}}]
 ${!unless false "ran" "skipped"}                      ;; "ran"
 ```
 
+In a template, `t ...` repeats `t` for each match of a repeated pattern. A splice group `{... a b}` stands for
+its elements in place, so `{... a b} ...` repeats two elements together:
+
+```text
+$[Macro !rec {{{k v} ...} {. {... k v} ...}}]
+${!rec {x 1} {y 2}}                                   ;; {x: 1, y: 2}
+```
+
 ## 7. Compile-time evaluation and types as values
 
 `[% e]` evaluates `e` while the document is being checked, and embeds the result as a constant:
@@ -242,10 +273,12 @@ $[# b {+ 1 2}] $[% b]     ;; stage error: a static expression cannot use the run
 $[# b [% {+ 1 2}]] $[% b] ;; fine
 ```
 
-Types are ordinary values of type `Type`, built by ordinary functions. Positions where the checker reads a type
-need a static one, so computed types are wrapped in `[% ]`:
+Types are ordinary values of type `Type`, built by ordinary functions. Where the checker reads a type (an
+ascription's type, a native's signature), it evaluates it at compile time, as if written `[% ]`. A type you
+name with `[# ...]` is an ordinary binding, so it needs `[% ]` to be static:
 
 ```text
+${: {' 1.0} {List Float}}         ;; computed in place: no [% ] needed
 $[# Person [% {Struct {' {Field "name" String} {Field "age" Int}}}]]
 ${: p Person}                     ;; checks p against the computed record type
 ```
@@ -294,7 +327,8 @@ ordinary function with an ordinary type, so you can alias it, wrap it, or pass i
 | `{+ 1 2 3}` | Operators are binary | `{+ {+ 1 2} 3}` or `{fold {' 1 2 3} 0 +}` |
 | `{+ 1}` | No partial application | `{^ {x} {+ 1 x}}` |
 | `{+ 1 2.0}` | No implicit Int to Float | `{+ {float 1} 2.0}` |
-| `[# f {^ {n} {f n}}]` | A plain binding is not recursive | `[# f {^ f {n} {f n}}]` |
+| `[# f {^ {n} {f n}}]` | A plain binding is not recursive | `[# {f n} {f n}]` |
+| `[# {g x} {+ {g x} 1}]` to extend an outer `g` | In a function definition, `g` is the new function, so it recurses forever | `[# g {^ {x} {+ {g x} 1}}]` |
 | `{if c a b}` | `if` is a macro | `{!if c a b}` |
 | `{. x 1 y}` | A label without a value | `{. x 1 y 2}` |
 | `$[% x]` where `x` is computed | `x` is a runtime binding | `[# x [% ...]]` |

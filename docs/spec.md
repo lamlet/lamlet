@@ -56,7 +56,7 @@ is call sugar (`r.f`).
 | `{f a1 ... an}` | Application, evaluated eagerly with exact arity. `{f}` calls a zero-argument function. |
 | `{^ {x1 ... xn} decl* e}` | Lambda (`λ` is the same head: `{λ {x} e}`) |
 | `{^ self {x1 ... xn} decl* e}` | Recursive lambda: `self` names the function inside its body |
-| `{: e T}` | Ascription: `T` must be a statically known Type |
+| `{: e T}` | Ascription: `T` is a Type, evaluated at compile time as if written `[% T]` |
 | `{' e1 ... en}` | List literal |
 | `{. l1 e1 ... ln en}` | Record literal (labels are not evaluated) |
 | `{!m operands...}` | Macro use (syntax → syntax) |
@@ -70,9 +70,9 @@ A bracket form's head is a keyword from a closed set. It is never a binding and 
 
 | Form | Class | Where | Value? | Binds? | Stage | Operands evaluated? |
 |---|---|---|---|---|---|---|
-| `[# x e]` | declaration | definition context | no | `x` | — | `e`, at the context's stage |
+| `[# x e]`, `[# {f x...} decl* e]` | declaration | definition context | no | `x`, `f` | — | `e`, at the context's stage |
 | `[Import p]`, `[Import* p]`, `[ImportAs p a]` | declaration | definition context | no | namespace (and exports) | compile | no |
-| `[Native x T "id" Pure\|Static\|Runtime]` | declaration | definition context | no | `x` | compile | `T` statically |
+| `[Native x T "id" Pure\|Static\|Runtime]` | declaration | definition context | no | `x` | compile | `T`, as if written `[% T]` |
 | `[NativeType x "id"]` | declaration | definition context | no | `x : Type` | compile | no |
 | `[Macro !m {pattern template}...]` | declaration | definition context | no | `!m` | compile | no (syntax) |
 | `[% e]` | stage boundary | expression | yes | no | static | `e`, during checking |
@@ -96,6 +96,18 @@ evaluation happens.
 A lambda body, a module, or a document is a sequence of declarations followed by one result expression. For a
 module or document, the expression regions take the place of the result.
 
+A binding declaration `[# ...]` holds one or more bindings, each one of:
+
+- `x e`: binds `x` to the value of `e`.
+- `{f x1 ... xn} decl* e`: a function definition, `f {^ f {x1 ... xn} decl* e}`. The function is named after
+  itself, so it may recurse; it is still generalized afterwards like any binding. Inside its body `f` is always
+  the function itself, even where it shadows an outer `f`; to wrap an outer `f`, use the plain form
+  `[# f {^ {x} ... {f x} ...}]`, whose expression cannot see the binding it makes. Its body is the declarations
+  that follow the head, up to and including the first expression.
+
+`[# a 1 b {+ a 1}]` is `[# a 1] [# b {+ a 1}]`: the bindings are in source order, and each one sees the ones
+before it. A prose doc above a region with several bindings documents the first.
+
 Scoping rules:
 
 - A declaration binds the rest of its body, in source order.
@@ -110,11 +122,14 @@ Scoping rules:
 | `{' e1 ... en}` | `listₙ(e1, ..., en)`, a constant n-ary constructor (≡ `K::cons(e1, ... K::nil)`, but flat). The elements are evaluated left to right. |
 | `{. l1 e1 ... ln en}` | `recordᵥ⟨l1..ln⟩(e1, ..., en)`, a constant constructor applied eagerly |
 | `[# x e] rest` in a body | `let x = e in rest` |
+| `[# {f x ...} decl* e]` | `[# f {^ f {x ...} decl* e}]` |
+| `[# b1 b2 ...]` | `[# b1] [# b2] ...` |
 | `{!if c a b}` (std macro) | `K::caseBool(c, λ().a, λ().b)` |
 | `{!and ...}`, `{!or ...}` | nested `!if` |
+| `{!case v {a x ea} ...}` (std macro) | `K::match(v, {. a λ(x).ea ...})` |
 | `{!assert a b}` | `[% {assertEqual a b}]` |
 | `[f "a $x b"]` | `K::stringAppend` chain over literal text and `K::scalarString(x)` |
-| `{: e T}` | `e`, after checking against `T` |
+| `{: e T}` | `e`, after checking against the value of `[% T]` |
 | `r.f` | `{f r}` |
 | `{r.f a ...}` (at a brace head) | `{f r a ...}` |
 | `r.f.g` | `{g {f r}}`; at a brace head, only the last step takes the arguments |
@@ -269,9 +284,11 @@ The supported fragment of computed types:
 
 - Computed types appear only where the checker reads a Type, which is two places: the type operand of `{: e T}`
   and the signature of `[Native ...]`.
-- There, the operand must elaborate to a **static constant**: the name of a static binding, or `[% e]`.
-- The checker reads the constant and converts it to a type. It never evaluates a function application to
-  obtain a type.
+- There, the operand is evaluated at compile time, as if written `[% T]`: `{: xs {List Int}}` and
+  `[Native f {Fn {' Int} Int} "id" Pure]` need no `[% ...]`. Like any `[% ...]`, it may use only static
+  bindings.
+- The checker reads the resulting constant and converts it to a type. It evaluates code to obtain a type only in
+  these two positions.
 
 Hence:
 
@@ -330,6 +347,11 @@ an ordered list of `{pattern template}` clauses:
 
 - **Matching.** A clause matches identifiers as variables, `_` as anything, literals exactly, nested lists by
   shape, and `p ...` as a repetition.
+- **Templates.** A template is the clause's syntax with its pattern variables substituted. `t ...` repeats `t`
+  once per match of the repeated variables it contains. A *splice group* `{... t1 ... tn}` instantiates
+  `t1 ... tn` in place, inside the enclosing list, so `{... t1 t2} ...` repeats two elements together:
+  `{. {... k {f v}} ...}` builds a record from `{k v} ...`. A splice group must be an element of a list, and
+  only templates may use it.
 - **Hygiene.** Names a template introduces resolve where the macro was defined, and binders it introduces
   cannot capture the user's operands. This is implemented with marks.
 - **Checking.** An expansion is parsed and checked exactly like hand-written code, so it gets no shortcut

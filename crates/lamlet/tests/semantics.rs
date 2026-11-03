@@ -278,8 +278,16 @@ fn ascription() {
     assert_eq!(one(&s("$[# addChecked {: {^ {a b} {+ a b}} [% {Fn {' Int Int} Int}]}]\n${addChecked 2 3}")), "5");
     fails_with(&s("${{: {^ {a b} {+ a b}} [% {Fn {' Int Int} Int}]} 2.0 3.0}"), DiagKind::Type, "argument 1");
     fails_with(&s("${: \"wrong\" Int}"), DiagKind::Type, "ascribed type Int");
-    // The Type operand must be statically known: ascription never runs code to find a type.
-    fails_with(&s("${: 1 {List Int}}"), DiagKind::Stage, "statically known");
+    // The Type operand is evaluated at compile time, as if written [% T]: it may use only static bindings.
+    assert_eq!(one(&s("${: {' 1} {List Int}}")), "[1]");
+    assert_eq!(one(&s("${{: {^ {a b} {+ a b}} {Fn {' Int Int} Int}} 2 3}")), "5");
+    fails_with(&s("${: 1 {List Int}}"), DiagKind::Type, "ascribed type List(Int)");
+    fails_with(&s("$[# T {List Int}] ${: {' 1} T}"), DiagKind::Stage, "runtime binding `T`");
+    // A native's signature is evaluated the same way.
+    let interface = |src: &str| check_document("t.lam", src, resolver().into_rc(), Rc::new(NativeRegistry::new()), &Options { require_linked: false, ..Options::default() });
+    assert!(interface("$[Import* std]$[Native twice {Fn {' Int} Int} \"example.host/twice\" Pure]").is_ok());
+    let e = interface("$[Import* std]$[# Sig {Fn {' Int} Int}]$[Native twice Sig \"example.host/twice\" Pure]").err().unwrap();
+    assert!(e.render().contains("runtime binding `Sig`"), "{}", e.render());
     // Ascription cannot erase a capability requirement.
     fails_with(
         &s("$[Native clock [% {Fn {'} Float}] \"example.host/clock\" Runtime] $[# c {: clock [% {Fn {'} Float}]}] $[% {c}]"),

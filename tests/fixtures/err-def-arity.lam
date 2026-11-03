@@ -1,3 +1,3 @@
 $[Import* std]
 $[# x]
-expect-error: syntax: takes exactly
+expect-error: syntax: the binding of `x` needs an expression

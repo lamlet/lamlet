@@ -82,6 +82,15 @@ a `SelfClosure` instruction, so the closure never captures itself.
   constructed" failure mode.
 - Making a closure refer to itself through its frame keeps reference counting acyclic, at no cost.
 
+**Sugar.** `[# {f x} body]` is `[# f {^ f {x} body}]`. The head declares `f`, so in the body `f` is the function
+being defined, as with Scheme's `define` or Python's `def`, and recursion needs no second spelling of the name.
+This differs from the plain form exactly when `f` shadows an outer binding: `[# {g x} {+ {g x} 1}]` calls
+itself, while `[# g {^ {x} {+ {g x} 1}}]` wraps the outer `g`, because a plain binding's expression cannot see
+the name it binds. Both are deliberate: the function form defines, and the plain form extends. It is pure
+syntax: the reader produces the same lambda, and the checker has no rule for it. One `[# ...]` may also
+hold several bindings (`[# a 1 b 2]`), which is the same as one declaration per binding; a function head's body
+ends at its first expression, so the forms stay unambiguous without separators.
+
 **Limitation.** There is no mutual recursion. It can be encoded by dispatching on a variant tag inside one
 function. `letrec` groups are future work.
 
@@ -101,7 +110,11 @@ output, and laziness is always visible as a lambda.
 
 **Decision.** A binding is static by a syntactic rule (spec §5), never because an optimizer could fold it. Type
 values may be computed at any stage, because building a Type has no effect. Only the checker's *reading* of a
-Type requires a static constant, and the checker never evaluates code to find one.
+Type requires a static constant. The checker evaluates code to find one only at an explicit stage boundary:
+`[% e]`, the type operand of an ascription `{: e T}`, or a native's signature `[Native f T …]`. Those operands
+can only ever be static Types, so they are stage boundaries by their position, and `{: xs {List Int}}` and
+`[Native f {Fn {' Int} Int} …]` need no `[% ...]`. The rule is still syntactic: `T`
+may use only static bindings, exactly as inside `[% ...]`.
 
 **Supported fragment.** Computed types are ground, first-order descriptors: no type variables (`{List a}` cannot
 be written) and no recursive types. This keeps the checker free of dependent typing.
@@ -135,6 +148,13 @@ is 1 ulp above e.
 **Decision.** Macros are hygienic pattern macros, with budgets. There are no procedural macros.
 
 **Why.** No use case needs them; computation over data uses `[% ...]`.
+
+**Splice groups.** A template's `...` repeats one element, so producing flat pairs (`{. a fa b fb}` from
+`{a fa} {b fb}`) once needed a recursive helper macro, one expansion level per pair, which ran into the depth
+limit for large or nested uses. A splice group `{... t1 t2}` is instantiated in place, so `{... t1 t2} ...`
+repeats several elements in one expansion. It reuses the reserved `...` in a position that had no meaning, so
+no existing macro changes. Patterns do not accept it yet: matching a flat sequence in chunks (`{... k v} ...`
+against `a 1 b 2`) is the natural extension, deferred until a macro needs it.
 
 **Limits.** Macro expansion depth (64), checker expression nesting (96), and reader nesting (200) are limited
 deliberately. Together they bound the host stack, so even unoptimized builds report a `limit` diagnostic rather

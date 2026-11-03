@@ -54,19 +54,21 @@ x   pkg::x   K::add   +   std::+                names; `::` separates module pat
 
 {f a b}                 application              {f}            call a zero-argument function
 {^ {x y} decl* body}    lambda                   {^ name {x} …} recursive lambda (name = itself)
-{: e T}                 type ascription (T statically known: a Type name, static binding, or [% …])
+{: e T}                 type ascription (T runs at compile time, as [% T]: it may use only static names)
 {' a b c}   {'}         list literal / empty list
 {. a 1 b 2}  {.}        record literal (labels are word identifiers, not evaluated)
 {!m operands…}          macro use (always marked with !)
 x.f   {x.f a b}   x.f.g call sugar: {f x}, {f x a b}, {g {f x}}  (no space before the dot!)
 
 [# name expr]           binding (in a document or a lambda body, before the result expression)
+[# {f x y} decl* body]  function definition: [# f {^ f {x y} decl* body}], so f may recurse
+[# a 1 {f x} body b 2]  several bindings in one declaration, in source order (let*)
 [% expr]                evaluate at compile time; the result is embedded as a constant
 [f "Hi $name, ${expr}"] string template: each hole is typed (Scalar); $$ is a literal $
 [latex "\frac{$a}{2}"]  LaTeX template: raw backslashes; result type Latex = {latex: String}
 [Import p]  [Import* p]  [ImportAs p alias]            imports (lexical, source order)
 [Macro !name {pattern template} ...]                   pattern macro
-[Native name [% {Fn {' A B} R}] "api.id/x" Pure|Static|Runtime]   typed host function
+[Native name {Fn {' A B} R} "api.id/x" Pure|Static|Runtime]   typed host function (signature runs as [% …])
 [NativeType Name "type.id"]                            opaque host type
 ```
 
@@ -127,7 +129,8 @@ Unit Bool Int Float String Type   List(a)   Fn([a, b], r)   {x: Int, y: a}   <no
 | `{Variant {' {Field "a" T} ...}}` | a variant type |
 | `{Option T}`, `{Pair A B}` | the std option and pair types |
 
-Use computed types for checking, via ascription and native signatures, where they must be static:
+Use computed types for checking. An ascription's type and a native's signature are evaluated at compile time
+(`{: xs {List Int}}`, `[Native f {Fn {' Int} Int} …]`); a *named* type must be a static binding:
 `[# P [% {Struct {' {Field "x" Int}}}]] {: v P}`.
 
 ## 4. Semantics an expert must know
@@ -146,7 +149,9 @@ Use computed types for checking, via ascription and native signatures, where the
 
 ### 4.2 Recursion
 
-- **Only named lambdas recurse:** `[# fact {^ fact {n} ...}]`. A plain binding cannot see itself.
+- **Only named lambdas recurse:** `[# {fact n} ...]` (short for `[# fact {^ fact {n} ...}]`). A plain binding
+  `[# f {^ {n} ...}]` cannot see itself, which makes it the way to wrap a shadowed outer `f`:
+  `[# g {^ {x} {+ {g x} 1}}]` calls the outer `g`, while `[# {g x} {+ {g x} 1}]` calls itself forever.
 - **Recursion is monomorphic** within its own body, and **there is no mutual recursion**. To work around that,
   dispatch on a variant tag inside one function.
 - **Tail calls** run in constant VM frames. Non-tail recursion is limited to 200k frames, so write long loops
@@ -159,7 +164,8 @@ These are the only primitive ways to inspect data:
 - `K::caseBool b thenThunk elseThunk`
 - `K::caseList xs ifEmpty {^ {head tail} ...}`
 - `K::match v {. tag1 handler1 tag2 handler2}`: exactly one handler per alternative, and every handler is a
-  1-argument function. Unit payloads take `{^ {u} ...}`.
+  1-argument function. Unit payloads take `{^ {u} ...}`. The std macro `!case` is the shorter form:
+  `{!case v {tag1 x body1} {tag2 y body2}}`.
 
 ### 4.4 Staging
 
@@ -187,6 +193,8 @@ native and still be called at runtime. Runtime code may not call `Static` native
 - **Clauses.** `[Macro !name {pattern template} ...]` tries its clauses in order.
 - **Patterns.** An identifier is a pattern variable, `_` matches anything, literals match exactly, nested lists
   match by shape, and `p ...` repeats.
+- **Templates.** `t ...` repeats one element. To repeat several together, use a splice group, which expands in
+  place: `{... k {f v}} ...` (std's `!case` builds its handler record this way).
 - **Hygiene.** Names a template introduces resolve where the macro was defined, and binders it introduces cannot
   capture user operands. Labels (`{. x a}`, `.x`, `#t`) are syntax, so hygiene leaves them alone.
 - **Macro names** must be word identifiers (`!pipe`, not `!->`).
@@ -242,7 +250,7 @@ The top ten (more, with exact diagnostics, in `references/errors.md`):
 | `{+ 1 2 3}`, `{- x}` | `{+ {+ 1 2} 3}`, `{neg x}` |
 | `{+ 1}` (partial application) | `{^ {y} {+ 1 y}}` |
 | `{+ 1 2.0}` | `{+ {float 1} 2.0}` |
-| `[# f {^ {n} … {f …}}]` | `[# f {^ f {n} … {f …}}]` |
+| `[# f {^ {n} … {f …}}]` | `[# {f n} … {f …}]` |
 | `{if c a b}` | `{!if c a b}` |
 | `{p.name}` to read a field | `{.name p}` |
 | `std.map`, `K.add` | `std::map`, `K::add` |

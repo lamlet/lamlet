@@ -1,0 +1,3 @@
+$[# {f x} 1 {f y} 2]
+A name is bound once per scope, even inside one declaration.
+expect-error: name: `f` is already bound in this scope

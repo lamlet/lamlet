@@ -7,19 +7,19 @@ starting with `_` is private. Each definition's doc is the paragraph directly ab
 1. Functions
 
 Fn([A], A). Returns its argument unchanged.
-$[# id {^ {x} x}]
+$[# {id x} x]
 
 Fn([A, B], A). Returns x; the second argument is still evaluated.
-$[# const {^ {x ignored} x}]
+$[# {const x ignored} x]
 
 Fn([Fn([B], C), Fn([A], B)], Fn([A], C)). {compose f g} is the function x -> {f {g x}}.
-$[# compose {^ {f g} {^ {x} {f {g x}}}}]
+$[# {compose f g} {^ {x} {f {g x}}}]
 
 Fn([Fn([A, B], C)], Fn([B, A], C)). The same function with its two arguments swapped.
-$[# flip {^ {f} {^ {x y} {f y x}}}]
+$[# {flip f} {^ {x y} {f y x}}]
 
 Fn([String], A). Aborts the whole evaluation with the message; it never returns, so it fits any type.
-$[# error {^ {message} {K::fail message}}]
+$[# {error message} {K::fail message}]
 
 Unit. The only value of type Unit.
 $[# unit K::unit]
@@ -49,10 +49,10 @@ $[Macro !or
     {{first rest ...} {!if first true {!or rest ...}}}]
 
 Fn([Bool], Bool). Logical negation.
-$[# not {^ {b} {!if b false true}}]
+$[# {not b} {!if b false true}]
 
 Fn([Bool, A, A], A). Selects x if b is true, otherwise y. Both are already evaluated: use !if to avoid that.
-$[# choose {^ {b x y} {!if b x y}}]
+$[# {choose b x y} {!if b x y}]
 
 3. Equality and order
 
@@ -60,28 +60,28 @@ Eq A: Fn([A, A], Bool). Structural equality; functions and native values have no
 $[# = K::equal]
 
 Eq A: Fn([A, A], Bool). True when the values differ.
-$[# != {^ {a b} {not {= a b}}}]
+$[# {!= a b} {not {= a b}}]
 
 Ord A: Fn([A, A], Bool). Strictly less. Int, Float, and String (by Unicode scalar) are ordered.
 $[# < K::less]
 
 Ord A: Fn([A, A], Bool). Strictly greater.
-$[# > {^ {a b} {< b a}}]
+$[# {> a b} {< b a}]
 
 Ord A: Fn([A, A], Bool). Less or equal.
-$[# <= {^ {a b} {not {< b a}}}]
+$[# {<= a b} {not {< b a}}]
 
 Ord A: Fn([A, A], Bool). Greater or equal.
-$[# >= {^ {a b} {not {< a b}}}]
+$[# {>= a b} {not {< a b}}]
 
 Ord A: Fn([A, A], A). The smaller value (the first, on ties).
-$[# min {^ {a b} {!if {< b a} b a}}]
+$[# {min a b} {!if {< b a} b a}]
 
 Ord A: Fn([A, A], A). The larger value (the first, on ties).
-$[# max {^ {a b} {!if {< a b} b a}}]
+$[# {max a b} {!if {< a b} b a}]
 
 Ord A: Fn([A, A, A], A). x limited to the range from lo to hi.
-$[# clamp {^ {x lo hi} {min {max x lo} hi}}]
+$[# {clamp x lo hi} {min {max x lo} hi}]
 
 4. Numbers
 
@@ -101,7 +101,7 @@ Num N: Fn([N], N). Negation.
 $[# neg K::negate]
 
 Num N: Fn([N], N). The magnitude; abs of the minimum Int overflows.
-$[# abs {^ {x} {!if {< x {- x x}} {neg x} x}}]
+$[# {abs x} {!if {< x {- x x}} {neg x} x}]
 
 Fn([Int, Int], Int). Euclidean quotient: a = b*q + r with 0 <= r < abs(b).
 $[# div K::quotientEuclidean]
@@ -146,10 +146,10 @@ Float. The ratio of a circle's circumference to its diameter.
 $[# pi 3.141592653589793]
 
 Fn([Float, Float], Float). x to the power y, for x >= 0 (0 to any power is 0).
-$[# pow {^ {x y} {!if {= x 0.0} 0.0 {exp {* y {ln x}}}}}]
+$[# {pow x y} {!if {= x 0.0} 0.0 {exp {* y {ln x}}}}]
 
 Fn([Float, Float, Float], Float). Linear interpolation: a at t = 0, b at t = 1.
-$[# lerp {^ {a b t} {+ a {* {- b a} t}}}]
+$[# {lerp a b t} {+ a {* {- b a} t}}]
 
 5. Lists
 
@@ -161,89 +161,89 @@ with the head and tail.
 $[# caseList K::caseList]
 
 Fn([List(A), B, Fn([B, A], B)], B). Left fold: combines the accumulator with each element, first to last.
-$[# fold {^ go {xs acc f}
-    {K::caseList xs {^ {} acc} {^ {x rest} {go rest {f acc x} f}}}
-}]
+$[# {fold xs acc f}
+    {K::caseList xs {^ {} acc} {^ {x rest} {fold rest {f acc x} f}}}
+]
 
 Fn([List(A)], List(A)). The elements in reverse order.
-$[# reverse {^ {xs} {fold xs {'} {^ {acc x} {cons x acc}}}}]
+$[# {reverse xs} {fold xs {'} {^ {acc x} {cons x acc}}}]
 
 Fn([List(A), B, Fn([A, B], B)], B). Strict right fold: callbacks run from the last element to the first.
-$[# foldr {^ {xs acc f} {fold {reverse xs} acc {^ {a x} {f x a}}}}]
+$[# {foldr xs acc f} {fold {reverse xs} acc {^ {a x} {f x a}}}]
 
 Fn([List(A), Fn([A], B)], List(B)). Applies f to each element, in order.
-$[# map {^ {xs f} {reverse {fold xs {'} {^ {acc x} {cons {f x} acc}}}}}]
+$[# {map xs f} {reverse {fold xs {'} {^ {acc x} {cons {f x} acc}}}}]
 
 Fn([List(A), Fn([A], Bool)], List(A)). The elements for which p is true, in order.
-$[# filter {^ {xs p} {reverse {fold xs {'} {^ {acc x} {!if {p x} {cons x acc} acc}}}}}]
+$[# {filter xs p} {reverse {fold xs {'} {^ {acc x} {!if {p x} {cons x acc} acc}}}}]
 
 Fn([List(A)], Bool). True for the empty list.
-$[# isEmpty {^ {xs} {K::caseList xs {^ {} true} {^ {x rest} false}}}]
+$[# {isEmpty xs} {K::caseList xs {^ {} true} {^ {x rest} false}}]
 
 Fn([List(A)], A). The first element; errors on an empty list.
-$[# head {^ {xs} {K::caseList xs {^ {} {error "head of an empty list"}} {^ {x rest} x}}}]
+$[# {head xs} {K::caseList xs {^ {} {error "head of an empty list"}} {^ {x rest} x}}]
 
 Fn([List(A)], List(A)). Everything after the first element; errors on an empty list.
-$[# tail {^ {xs} {K::caseList xs {^ {} {error "tail of an empty list"}} {^ {x rest} rest}}}]
+$[# {tail xs} {K::caseList xs {^ {} {error "tail of an empty list"}} {^ {x rest} rest}}]
 
 Fn([List(A)], Int). The number of elements.
-$[# length {^ {xs} {fold xs 0 {^ {n x} {+ n 1}}}}]
+$[# {length xs} {fold xs 0 {^ {n x} {+ n 1}}}]
 
 Fn([List(A), List(A)], List(A)). xs followed by ys.
-$[# append {^ {xs ys} {foldr xs ys cons}}]
+$[# {append xs ys} {foldr xs ys cons}]
 
 Fn([List(List(A))], List(A)). Concatenates a list of lists, one level deep.
-$[# flatten {^ {xss} {foldr xss {'} append}}]
+$[# {flatten xss} {foldr xss {'} append}]
 
 Fn([List(A), Int], A). The element at a zero-based index; errors when it is out of range.
-$[# nth {^ go {xs i}
-    {K::caseList xs {^ {} {error "nth: index out of range"}} {^ {x rest} {!if {= i 0} x {go rest {- i 1}}}}}
-}]
+$[# {nth xs i}
+    {K::caseList xs {^ {} {error "nth: index out of range"}} {^ {x rest} {!if {= i 0} x {nth rest {- i 1}}}}}
+]
 
 Fn([Int, Int], List(Int)). The Ints from `from` up to, but not including, `to`.
-$[# range {^ {from to}
-    [# go {^ go {i acc} {!if {< i from} acc {go {- i 1} {cons i acc}}}}]
+$[# {range from to}
+    [# {go i acc} {!if {< i from} acc {go {- i 1} {cons i acc}}}]
     {go {- to 1} {'}}
-}]
+]
 
 Fn([List(A), Int], List(A)). At most the first n elements.
-$[# take {^ {xs n}
-    [# go {^ go {ys k acc} {!if {<= k 0} acc {K::caseList ys {^ {} acc} {^ {y rest} {go rest {- k 1} {cons y acc}}}}}}]
+$[# {take xs n}
+    [# {go ys k acc} {!if {<= k 0} acc {K::caseList ys {^ {} acc} {^ {y rest} {go rest {- k 1} {cons y acc}}}}}]
     {reverse {go xs n {'}}}
-}]
+]
 
 Fn([List(A), Int], List(A)). Everything after the first n elements.
-$[# drop {^ go {xs n}
-    {!if {<= n 0} xs {K::caseList xs {^ {} {'}} {^ {x rest} {go rest {- n 1}}}}}
-}]
+$[# {drop xs n}
+    {!if {<= n 0} xs {K::caseList xs {^ {} {'}} {^ {x rest} {drop rest {- n 1}}}}}
+]
 
 Fn([List(A), Fn([A], Bool)], Bool). True when p holds for some element (stops at the first).
-$[# any {^ go {xs p}
-    {K::caseList xs {^ {} false} {^ {x rest} {!or {p x} {go rest p}}}}
-}]
+$[# {any xs p}
+    {K::caseList xs {^ {} false} {^ {x rest} {!or {p x} {any rest p}}}}
+]
 
 Fn([List(A), Fn([A], Bool)], Bool). True when p holds for every element (stops at the first failure).
-$[# all {^ go {xs p}
-    {K::caseList xs {^ {} true} {^ {x rest} {!and {p x} {go rest p}}}}
-}]
+$[# {all xs p}
+    {K::caseList xs {^ {} true} {^ {x rest} {!and {p x} {all rest p}}}}
+]
 
 Fn([List(A), List(B)], List({first: A, second: B})). Pairs elements up to the shorter list's length.
-$[# zip {^ go {xs ys}
+$[# {zip xs ys}
     {K::caseList xs {^ {} {'}} {^ {x xr}
-        {K::caseList ys {^ {} {'}} {^ {y yr} {cons {. first x second y} {go xr yr}}}}
+        {K::caseList ys {^ {} {'}} {^ {y yr} {cons {. first x second y} {zip xr yr}}}}
     }}
-}]
+]
 
 Eq A: Fn([List(A), A], Bool). True when some element equals the value.
-$[# contains {^ {xs value} {any xs {^ {x} {= x value}}}}]
+$[# {contains xs value} {any xs {^ {x} {= x value}}}]
 
 Eq A: Fn([List(A)], List(A)). Keeps the first occurrence of each value, in order.
-$[# unique {^ {xs}
+$[# {unique xs}
     {reverse {fold xs {'} {^ {seen x} {!if {contains seen x} seen {cons x seen}}}}}
-}]
+]
 
 Eq A: Fn([List(A), List(A)], List(A)). Concatenates two lists and keeps the first occurrence of each value.
-$[# union {^ {xs ys} {unique {append xs ys}}}]
+$[# {union xs ys} {unique {append xs ys}}]
 
 6. Records, variants, options, and pairs
 
@@ -254,8 +254,14 @@ Fn([V, H], R). {match v {. a fa b fb}} calls the handler of v's alternative with
 must cover exactly the variant's alternatives.
 $[# match K::match]
 
+{!case v {alt x body} ...}: matches v, binding the payload of each alternative to x in its body. It is
+{match v {. alt {^ {x} body} ...}}, so the clauses must cover exactly the variant's alternatives. A Unit
+payload still has a name: {!case o {none u 0} {some x x}}.
+$[Macro !case
+    {{v {alt x body} ...} {match v {. {... alt {^ {x} body}} ...}}}]
+
 Fn([A, B], {first: A, second: B}). A pair is an ordinary record.
-$[# pair {^ {a b} {. first a second b}}]
+$[# {pair a b} {. first a second b}]
 
 Fn([{first: A, ...}], A). The first component of a pair (or any record with a `first` field).
 $[# first .first]
@@ -270,15 +276,15 @@ $[# some #some]
 $[# none [% {#none K::unit}]]
 
 Fn([<none: Unit, some: A>, Fn([], R), Fn([A], R)], R). Calls ifNone for none, or ifSome with the payload.
-$[# caseOption {^ {o ifNone ifSome} {match o {. none {^ {u} {ifNone}} some ifSome}}}]
+$[# {caseOption o ifNone ifSome} {match o {. none {^ {u} {ifNone}} some ifSome}}]
 
 Fn([<none: Unit, some: A>, A], A). The payload, or the default for none.
-$[# withDefault {^ {o default} {caseOption o {^ {} default} id}}]
+$[# {withDefault o default} {caseOption o {^ {} default} id}]
 
 7. Types
 
-Type values are ordinary data describing types. They are used by ascription {: e T} and native declarations,
-where they must be statically known.
+Type values are ordinary data describing types. They are used by ascription {: e T}, whose type is computed at
+compile time, and by native declarations, where they must be statically known.
 
 The Type of signed 64-bit integers.
 $[# Int K::intType]
@@ -305,7 +311,7 @@ Fn([List(Type), Type], Type). {Fn {' A B} R} is the Type of functions from A and
 $[# Fn K::functionType]
 
 Fn([String, Type], {name: String, type: Type}). A named member, for Struct and Variant.
-$[# Field {^ {name T} {. name name type T}}]
+$[# {Field name T} {. name name type T}]
 
 Fn([List({name: String, type: Type})], Type). A structural record Type; member order does not matter.
 $[# Struct K::recordType]
@@ -317,10 +323,10 @@ The empty variant: the Type of an expression that never returns.
 $[# Never [% {Variant {'}}]]
 
 Fn([Type], Type). The Type of optional values of T.
-$[# Option {^ {T} {Variant {' {Field "none" Unit} {Field "some" T}}}}]
+$[# {Option T} {Variant {' {Field "none" Unit} {Field "some" T}}}]
 
 Fn([Type, Type], Type). The Type of pairs.
-$[# Pair {^ {A B} {Struct {' {Field "first" A} {Field "second" B}}}}]
+$[# {Pair A B} {Struct {' {Field "first" A} {Field "second" B}}}]
 
 8. Strings
 
@@ -334,45 +340,45 @@ Fn([String], List(String)). The String's Unicode scalars, each as a one-scalar S
 $[# chars K::stringScalars]
 
 Fn([List(String)], String). Concatenates a list of Strings.
-$[# concat {^ {xs} {fold xs "" ++}}]
+$[# {concat xs} {fold xs "" ++}]
 
 Fn([String, List(String)], String). Concatenates with sep between neighbours.
-$[# join {^ {sep xs}
+$[# {join sep xs}
     {K::caseList xs {^ {} ""} {^ {x rest} {fold rest x {^ {acc y} {++ acc {++ sep y}}}}}}
-}]
+]
 
 Fn([String, Int, Int], String). The len scalars starting at index start (zero-based), clipped to the String:
 {"Hello!".substr 0 3} is "Hel".
-$[# substr {^ {s start len} {concat {take {drop {chars s} start} len}}}]
+$[# {substr s start len} {concat {take {drop {chars s} start} len}}]
 
 Fn([String, String], List(String)). The pieces between occurrences of sep, a one-scalar String:
 {"a,b,,c".split ","} is ["a", "b", "", "c"].
-$[# split {^ {s sep}
-    [# step {^ {acc c} {!if {= c sep} {. done {cons {.cur acc} {.done acc}} cur ""} {.cur= acc {++ {.cur acc} c}}}}]
+$[# {split s sep}
+    [# {step acc c} {!if {= c sep} {. done {cons {.cur acc} {.done acc}} cur ""} {.cur= acc {++ {.cur acc} c}}}]
     [# r {fold {chars s} {. done {'} cur ""} step}]
     {reverse {cons {.cur r} {.done r}}}
-}]
+]
 
 Private. The format renderer over a template's scalars.
-$[# _render {^ go {cs args}
+$[# {_render cs args}
     {K::caseList cs
         {^ {} {K::caseList args {^ {} ""} {^ {a r} {error "format: too many arguments"}}}}
         {^ {c rest}
             {!if {= c "{"}
                 {K::caseList rest {^ {} {error "format: unmatched {"}} {^ {n more}
-                    {!if {= n "{"} {++ "{" {go more args}}
+                    {!if {= n "{"} {++ "{" {_render more args}}
                         {!if {= n "}"}
-                            {K::caseList args {^ {} {error "format: too few arguments"}} {^ {a r} {++ a {go more r}}}}
+                            {K::caseList args {^ {} {error "format: too few arguments"}} {^ {a r} {++ a {_render more r}}}}
                             {error "format: invalid slot"}}}}}
                 {!if {= c "}"}
                     {K::caseList rest {^ {} {error "format: unmatched }"}} {^ {n more}
-                        {!if {= n "}"} {++ "}" {go more args}} {error "format: unmatched }"}}}}
-                    {++ c {go rest args}}}}}}
-}]
+                        {!if {= n "}"} {++ "}" {_render more args}} {error "format: unmatched }"}}}}
+                    {++ c {_render rest args}}}}}}
+]
 
 Fn([String, List(String)], String). Replaces each {} in the template by the next argument; {{ and }} are
 literal braces. Too few or too many arguments is an error. For typed holes, prefer [f "..."].
-$[# format {^ {template args} {_render {chars template} args}}]
+$[# {format template args} {_render {chars template} args}]
 
 The Type of [latex "..."] formulas: a record holding LaTeX source, so hosts can render it as math.
 $[# Latex [% {Struct {' {Field "latex" String}}}]]
@@ -383,9 +389,9 @@ $[# latexSource .latex]
 9. Assertions, hashing, and host time
 
 Eq A: Fn([A, A], A). Returns a if the values are equal, otherwise fails with both values.
-$[# assertEqual {^ {a b}
+$[# {assertEqual a b}
     {!if {= a b} a {error {concat {' "assertion failed: " {debug a} " is not equal to " {debug b}}}}}
-}]
+]
 
 {!assert a b}: checks during preparation that a equals b and returns a. Both must be statically available.
 $[Macro !assert

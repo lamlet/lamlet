@@ -1,3 +1,5 @@
 $[Import* std]
-${: 1 {List Int}}
-expect-error: stage: statically known
+A named type must be a static binding: {List Int} alone is computed at runtime.
+$[# T {List Int}]
+${: {' 1} T}
+expect-error: stage: cannot use the runtime binding `T`

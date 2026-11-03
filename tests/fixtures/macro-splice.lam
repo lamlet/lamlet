@@ -1,0 +1,12 @@
+$[Import* std]
+A splice group `{... a b}` stands for its elements in place; followed by `...` it repeats them together.
+$[Macro !rec {{{k v} ...} {. {... k v} ...}}]
+${!rec {x 1} {y 2}}
+expect: {x: 1, y: 2}
+Without `...` a group splices once, and it may hold nested repetitions.
+$[Macro !wrap {{x ys ...} {' {... x ys ...} x}}]
+${!wrap 0 1 2}
+expect: [0, 1, 2, 0]
+`!case` expands in one step, so a long or deeply nested match stays within the expansion depth.
+${!case {#c {#b 3}} {a x 0} {b x 1} {c x {!case x {a y 0} {b y {* y 2}}}}}
+expect: 6

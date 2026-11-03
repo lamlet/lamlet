@@ -10,7 +10,7 @@ expect: {first: Int, second: <none: Unit, some: String>}
 ${!assert [% {Struct {' {Field "x" Int} {Field "y" Int}}}] [% {Struct {' {Field "y" Int} {Field "x" Int}}}]} ${!assert [% {Struct {'}}] [% {Struct {'}}]}
 expect: {x: Int, y: Int}
 expect: {}
-${: 3 Int} ${: {'} [% {List Bool}]} $Type $Never
+${: 3 Int} ${: {'} {List Bool}} $Type $Never
 expect: 3
 expect: []
 expect: Type

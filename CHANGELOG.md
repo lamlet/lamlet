@@ -24,6 +24,18 @@ bytecode version (`BYTECODE_VERSION`) are tracked separately from the crate vers
 - The `content` package (always available in the CLI, `lamlet_doc::CONTENT_SOURCE` for hosts): emphasis, links,
   images, code, formulas, headings, lists, tables, code blocks, named spans and groups, raw markup, and speech
   cues (`say`, `anchor`, `pause`), as typed values.
+- Function definitions: `[# {f x y} body]` is `[# f {^ f {x y} body}]`, so a defined function can call itself
+  without naming itself twice. The body may start with declarations, and ends at its first expression.
+- Several bindings in one declaration: `[# a 1 {f x} {+ x a} b 2]` is `[# a 1] [# {f x} {+ x a}] [# b 2]`. A
+  region's doc documents its first binding (language change).
+- An ascription's type and a native's signature are evaluated at compile time: `{: xs {List Int}}` is
+  `{: xs [% {List Int}]}`, and `[Native f {Fn {' Int} Int} …]` needs no `[% …]` (language change; both used to
+  be stage errors).
+- Splice groups in macro templates: `{... t1 t2}` instantiates its elements in place, so `{... k {f v}} ...`
+  repeats two elements together, in one expansion.
+- `!case`, a std macro for matching variants: `{!case s {circle r {* 3.0 {* r r}}} {rect wh {area wh}}}` is
+  `{match s {. circle {^ {r} …} rect {^ {wh} …}}}`. It expands in one step, so the number of clauses does not
+  count against the macro expansion depth.
 - `docs/conventions.md`, the recommended naming conventions: camel case in code, `_` in package names, `-` in
   ids, files, and extension programs.
 - Extensions: `lamlet NAME ARGS...` runs `lamlet-NAME ARGS...` from the PATH when NAME is not a command or a

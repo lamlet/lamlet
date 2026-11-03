@@ -672,7 +672,8 @@ impl Decl {
 
 #[derive(Clone, Debug)]
 pub enum Item {
-    Decl(Decl),
+    /// One bracket declaration; `[# a 1 b 2]` holds several, in source order.
+    Decls(Vec<Decl>),
     Expr(Expr),
 }
 
@@ -711,7 +712,7 @@ pub fn parse_expr(s: &Syntax) -> DResult<Expr> {
         Syntax::Brace(items, span) => brace(items, *span),
         Syntax::Bracket(items, span, _) => match bracket(items, *span, None)? {
             Item::Expr(e) => Ok(e),
-            Item::Decl(d) => syntax_err("a declaration has no value and cannot be used as an expression", d.span()),
+            Item::Decls(_) => syntax_err("a declaration has no value and cannot be used as an expression", *span),
         },
     }
 }
@@ -789,6 +790,11 @@ fn lambda(items: &[Syntax], span: Span) -> DResult<Expr> {
         Some(Syntax::Brace(ps, _)) => ps,
         _ => return syntax_err("expected a `{...}` parameter list after `^` or `λ` (or after `^ name`)", items.get(at).map_or(span, |s| s.span())),
     };
+    lambda_parts(self_name, ps, &items[at + 1..], span)
+}
+
+/// A lambda from its optional self name, its parameter syntax, and its body items.
+fn lambda_parts(self_name: Option<(String, Span)>, ps: &[Syntax], body_items: &[Syntax], span: Span) -> DResult<Expr> {
     let mut params: Vec<(String, Span)> = Vec::new();
     for p in ps {
         let (name, pspan) = param(p, "a lambda parameter")?;
@@ -806,7 +812,7 @@ fn lambda(items: &[Syntax], span: Span) -> DResult<Expr> {
             return syntax_err(format!("`{}` is both the lambda's name and a parameter", base_name(n)), *ns);
         }
     }
-    let body = body(&items[at + 1..], span)?;
+    let body = body(body_items, span)?;
     Ok(Expr::Lambda(self_name, params, body, span))
 }
 
@@ -816,11 +822,11 @@ fn body(items: &[Syntax], span: Span) -> DResult<Body> {
     let mut result: Option<Expr> = None;
     for s in items {
         match parse_item(s)? {
-            Item::Decl(d) => {
+            Item::Decls(ds) => {
                 if let Some(r) = &result {
-                    return syntax_err("declarations must precede the body's result expression", r.span().to(d.span()));
+                    return syntax_err("declarations must precede the body's result expression", r.span().to(s.span()));
                 }
-                decls.push(d)
+                decls.extend(ds)
             }
             Item::Expr(e) => {
                 if result.is_some() {
@@ -859,11 +865,7 @@ fn bracket(items: &[Syntax], span: Span, doc: Option<String>) -> DResult<Item> {
         None => return syntax_err("expected a bracket form name such as `#`, `%`, `Import`, or `Macro`", head.span()),
     };
     let item = match name.as_str() {
-        "#" => {
-            arity(items, 3, "`[# name expression]`", span)?;
-            let (n, ns) = param(&items[1], "a binding name")?;
-            Item::Decl(Decl::Def { name: n, name_span: ns, init: parse_expr(&items[2])?, span, doc })
-        }
+        "#" => Item::Decls(bindings(&items[1..], span, doc)?),
         "%" => {
             arity(items, 2, "`[% expression]`", span)?;
             Item::Expr(Expr::Static(Box::new(parse_expr(&items[1])?), span))
@@ -877,7 +879,7 @@ fn bracket(items: &[Syntax], span: Span, doc: Option<String>) -> DResult<Item> {
                 "Import*" => (ImportKind::Wildcard, None),
                 _ => (ImportKind::Alias, Some(param(&items[2], "a namespace alias")?.0)),
             };
-            Item::Decl(Decl::Import { kind, package: base_name(&pkg).to_string(), alias, span })
+            Item::Decls(vec![Decl::Import { kind, package: base_name(&pkg).to_string(), alias, span }])
         }
         "Native" => {
             arity(items, 5, "`[Native name Type \"api-id\" availability]`", span)?;
@@ -890,13 +892,13 @@ fn bracket(items: &[Syntax], span: Span, doc: Option<String>) -> DResult<Item> {
                 Some("Runtime") => Availability::Runtime,
                 _ => return syntax_err("availability must be Pure, Static, or Runtime", items[4].span()),
             };
-            Item::Decl(Decl::Native { name: n, name_span: ns, ty, api_id, availability, span, doc })
+            Item::Decls(vec![Decl::Native { name: n, name_span: ns, ty, api_id, availability, span, doc }])
         }
         "NativeType" => {
             arity(items, 3, "`[NativeType name \"type-id\"]`", span)?;
             let (n, ns) = param(&items[1], "a native type name")?;
             let type_id = string(items.get(2), "a native type ID", span)?;
-            Item::Decl(Decl::NativeType { name: n, name_span: ns, type_id, span, doc })
+            Item::Decls(vec![Decl::NativeType { name: n, name_span: ns, type_id, span, doc }])
         }
         "Macro" => macro_decl(items, span, doc)?,
         "f" | "latex" => {
@@ -910,6 +912,58 @@ fn bracket(items: &[Syntax], span: Span, doc: Option<String>) -> DResult<Item> {
         _ => return syntax_err(format!("unknown bracket form `[{} ...]`", name), head.span()),
     };
     Ok(item)
+}
+
+/// The bindings of `[# ...]`: one or more `name expression` pairs, or function definitions
+/// `{name params...} decl... result`, which are `name {^ name {params...} decl... result}`. The region's doc
+/// goes to the first binding.
+fn bindings(items: &[Syntax], span: Span, mut doc: Option<String>) -> DResult<Vec<Decl>> {
+    if items.is_empty() {
+        return syntax_err("`[# name expression]` needs a name, or a function head `{name params...}`", span);
+    }
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < items.len() {
+        let target = &items[i];
+        let rest = &items[i + 1..];
+        let (n, ns, init, used) = match target {
+            Syntax::Brace(head, hspan) => {
+                let (n, ns) = match head.first() {
+                    Some(h) => param(h, "a function name")?,
+                    None => return syntax_err("a function head `{name params...}` needs a name", *hspan),
+                };
+                // The body: declarations, then exactly one result expression (where the next binding starts).
+                let len = match rest.iter().position(|s| !is_decl_form(s)) {
+                    Some(k) => k + 1,
+                    None => return syntax_err(format!("the definition of `{}` needs a result expression", base_name(&n)), target.span()),
+                };
+                let lspan = target.span().to(rest[len - 1].span());
+                (n.clone(), ns, lambda_parts(Some((n, ns)), &head[1..], &rest[..len], lspan)?, len)
+            }
+            _ => {
+                let (n, ns) = param(target, "a binding name, or a function head `{name params...}`")?;
+                match rest.first() {
+                    Some(e) => (n, ns, parse_expr(e)?, 1),
+                    None => return syntax_err(format!("the binding of `{}` needs an expression", base_name(&n)), target.span()),
+                }
+            }
+        };
+        let dspan = if items.len() == 1 + used { span } else { target.span().to(rest[used - 1].span()) };
+        out.push(Decl::Def { name: n, name_span: ns, init, span: dspan, doc: doc.take() });
+        i += 1 + used;
+    }
+    Ok(out)
+}
+
+/// Whether a syntax tree is a declaration form, as opposed to an expression (`[% ...]` and templates are
+/// expressions).
+fn is_decl_form(s: &Syntax) -> bool {
+    match s {
+        Syntax::Bracket(items, _, _) => {
+            matches!(items.first().and_then(|h| h.ident()), Some("#" | "Import" | "Import*" | "ImportAs" | "Native" | "NativeType" | "Macro"))
+        }
+        _ => false,
+    }
 }
 
 fn macro_decl(items: &[Syntax], span: Span, doc: Option<String>) -> DResult<Item> {
@@ -939,7 +993,7 @@ fn macro_decl(items: &[Syntax], span: Span, doc: Option<String>) -> DResult<Item
             }
         }
     }
-    Ok(Item::Decl(Decl::Macro { name, name_span, clauses, span, doc }))
+    Ok(Item::Decls(vec![Decl::Macro { name, name_span, clauses, span, doc }]))
 }
 
 /// Validate a pattern list: at most one `...` per list, following an element; variables are unique.
@@ -947,6 +1001,9 @@ fn check_pattern(items: &[Syntax], vars: &mut Vec<String>) -> DResult<()> {
     let mut seen_ellipsis = false;
     for (i, p) in items.iter().enumerate() {
         if p.is_ellipsis() {
+            if i == 0 && items.len() > 1 {
+                return syntax_err("a splice group `{... }` is a template form; patterns cannot use it", p.span());
+            }
             if i == 0 || seen_ellipsis {
                 return syntax_err("`...` must follow a pattern element, at most once per list", p.span());
             }
@@ -1287,7 +1344,10 @@ pub fn instantiate(t: &Syntax, b: &Bindings, m: u32) -> Result<Syntax, String> {
         Syntax::Atom(tok) => match &tok.tok {
             Tok::Ident(parts) if parts.len() == 1 && b.contains_key(&parts[0]) => match &b[&parts[0]] {
                 MatchBinding::One(s) => Ok(s.clone()),
-                MatchBinding::Many(_) => Err(format!("pattern variable `{}` matched a sequence; follow it with `...`", parts[0])),
+                MatchBinding::Many(_) => Err(format!(
+                    "pattern variable `{}` matched a sequence; follow it with `...` (to repeat several elements together, group them: `{{... a b}} ...`)",
+                    parts[0]
+                )),
             },
             Tok::Ident(parts) => {
                 let mut parts = parts.clone();
@@ -1302,9 +1362,27 @@ pub fn instantiate(t: &Syntax, b: &Bindings, m: u32) -> Result<Syntax, String> {
             Tok::Str(l) if l.mark.is_none() => Ok(Syntax::Atom(Token { tok: Tok::Str(Lit { mark: Some(m), ..l.clone() }), span: tok.span })),
             _ => Ok(t.clone()),
         },
+        Syntax::Brace(..) if splice_group(t).is_some() => Err("a splice group `{... }` must be an element of a list".into()),
         Syntax::Brace(xs, s) => Ok(Syntax::Brace(instantiate_list(xs, b, m)?, *s)),
         Syntax::Bracket(xs, s, d) => Ok(Syntax::Bracket(instantiate_list(xs, b, m)?, *s, d.clone())),
     }
+}
+
+/// The elements of a template splice group `{... t1 ... tn}`, which instantiates in place as `t1 ... tn`.
+fn splice_group(t: &Syntax) -> Option<&[Syntax]> {
+    match t {
+        Syntax::Brace(xs, _) if xs.first().is_some_and(|h| h.is_ellipsis()) => Some(&xs[1..]),
+        _ => None,
+    }
+}
+
+/// Instantiate one template element into `out`: a splice group adds its elements, anything else adds itself.
+fn instantiate_into(t: &Syntax, b: &Bindings, m: u32, out: &mut Vec<Syntax>) -> Result<(), String> {
+    match splice_group(t) {
+        Some(xs) => out.extend(instantiate_list(xs, b, m)?),
+        None => out.push(instantiate(t, b, m)?),
+    }
+    Ok(())
 }
 
 fn instantiate_list(xs: &[Syntax], b: &Bindings, m: u32) -> Result<Vec<Syntax>, String> {
@@ -1336,11 +1414,11 @@ fn instantiate_list(xs: &[Syntax], b: &Bindings, m: u32) -> Result<Vec<Syntax>, 
                         inner.insert((*v).clone(), items[j].clone());
                     }
                 }
-                out.push(instantiate(&xs[i], &inner, m)?);
+                instantiate_into(&xs[i], &inner, m, &mut out)?;
             }
             i += 2;
         } else {
-            out.push(instantiate(&xs[i], b, m)?);
+            instantiate_into(&xs[i], b, m, &mut out)?;
             i += 1;
         }
     }
@@ -1364,19 +1442,23 @@ mod tests {
     fn parses_forms() {
         assert!(matches!(parse("{+ 1 2}").unwrap(), Item::Expr(Expr::Call(..))));
         assert!(matches!(parse("{^ {x} [# y x] y}").unwrap(), Item::Expr(Expr::Lambda(..))));
-        assert!(matches!(parse("[# x {f}]").unwrap(), Item::Decl(Decl::Def { .. })));
-        assert!(matches!(parse("[Import* std]").unwrap(), Item::Decl(Decl::Import { kind: ImportKind::Wildcard, .. })));
+        assert!(matches!(parse("[# x {f}]").unwrap(), Item::Decls(ds) if matches!(ds.as_slice(), [Decl::Def { .. }])));
+        assert!(matches!(parse("[Import* std]").unwrap(), Item::Decls(ds) if matches!(ds.as_slice(), [Decl::Import { kind: ImportKind::Wildcard, .. }])));
         assert!(matches!(parse("{std::+ 1 -8}").unwrap(), Item::Expr(Expr::Call(..))));
         assert!(matches!(parse("{- 8}").unwrap(), Item::Expr(Expr::Call(..))));
         assert!(matches!(parse("{!if c {f} 2}").unwrap(), Item::Expr(Expr::Macro(..))));
         assert!(matches!(parse("{!= 1 2}").unwrap(), Item::Expr(Expr::Call(..))));
-        assert!(matches!(parse("[Macro !m {{a ...} {f a ...}}]").unwrap(), Item::Decl(Decl::Macro { .. })));
+        assert!(matches!(parse("[Macro !m {{a ...} {f a ...}}]").unwrap(), Item::Decls(ds) if matches!(ds.as_slice(), [Decl::Macro { .. }])));
         assert!(matches!(parse("{' 1 2}").unwrap(), Item::Expr(Expr::List(..))));
         assert!(matches!(parse("{. x 1 y 2}").unwrap(), Item::Expr(Expr::Record(..))));
         assert!(matches!(parse("{^ go {n} {go n}}").unwrap(), Item::Expr(Expr::Lambda(Some(_), ..))));
         assert!(matches!(parse("{.x r}").unwrap(), Item::Expr(Expr::Call(..))));
         assert!(matches!(parse("{map rs .x=}").unwrap(), Item::Expr(Expr::Call(..))));
         assert!(matches!(parse("{#some 1}").unwrap(), Item::Expr(Expr::Call(..))));
+        assert!(matches!(parse("[# a 1 b 2]").unwrap(), Item::Decls(ds) if ds.len() == 2));
+        assert!(matches!(parse("[# {f x} [# y x] y]").unwrap(),
+            Item::Decls(ds) if matches!(ds.as_slice(), [Decl::Def { init: Expr::Lambda(Some(_), ps, b, _), .. }] if ps.len() == 1 && b.decls.len() == 1)));
+        assert!(matches!(parse("[# {f} 1 g {f}]").unwrap(), Item::Decls(ds) if ds.len() == 2));
     }
 
     #[test]
@@ -1394,6 +1476,12 @@ mod tests {
         assert!(parse("{. x 1 x 2}").is_err());
         assert!(parse("{^ f {f} 1}").is_err());
         assert!(parse("[# ' 1]").is_err());
+        assert!(parse("[#]").is_err());
+        assert!(parse("[# a 1 b]").is_err());
+        assert!(parse("[# {f x}]").is_err());
+        assert!(parse("[# {f x} [# y 1]]").is_err());
+        assert!(parse("[# {} 1]").is_err());
+        assert!(parse("[# {f f} 1]").is_err());
     }
 
     #[test]
@@ -1490,5 +1578,20 @@ mod tests {
         assert!(match_clause(&trees("x y"), &trees("1")).is_none());
         assert!(match_clause(&trees("x \"lit\""), &trees("1 \"lit\"")).is_some());
         assert!(match_clause(&trees("x \"lit\""), &trees("1 \"other\"")).is_none());
+    }
+
+    #[test]
+    fn splice_groups_repeat_several_elements() {
+        let show = |s: &Syntax| format!("{:?}", s);
+        let b = match_clause(&trees("{k v} ..."), &trees("{a 1} {b 2}")).unwrap();
+        let out = instantiate(&trees("{. {... k {f v}} ...}")[0], &b, 3).unwrap();
+        let Syntax::Brace(xs, _) = &out else { panic!() };
+        assert_eq!(xs.len(), 5, "{}", show(&out));
+        // Without `...` a group splices once; alone, it is an error.
+        let b = match_clause(&trees("x y"), &trees("1 2")).unwrap();
+        let Syntax::Brace(xs, _) = instantiate(&trees("{f {... x y} 3}")[0], &b, 3).unwrap() else { panic!() };
+        assert_eq!(xs.len(), 4);
+        assert!(instantiate(&trees("{... x y}")[0], &b, 3).is_err());
+        assert!(parse("[Macro !m {{{... a b}} 1}]").is_err());
     }
 }
