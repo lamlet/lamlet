@@ -17,7 +17,8 @@
 //!   that format is [`COMMONMARK`] ([`prose`]).
 //! - The `content` package ([`CONTENT_SOURCE`]) gives documents portable content: emphasis, links, images,
 //!   tables, code, headings, and speech cues.
-//! - Backends ([`backend`]): `text`, `markdown`, `html`, `json` (the IR itself), and `speech`.
+//! - Backends ([`backend`]): `text`, `markdown`, `html`, `json` (the IR itself), and `speech`. Extensions
+//!   (such as `lamlet-present`) build their own on the IR.
 //!
 //! `lamlet FILE` is the text backend with prose as plain text. The crate depends only on `lamlet`.
 

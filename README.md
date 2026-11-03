@@ -15,8 +15,9 @@ Lamlet can be embedded in a text document: only `$name`, `${...}`, and `$[...]` 
 else is a comment to the language, which a document host can preserve as prose. Typed native stubs let hosts
 expose APIs implemented outside Lamlet without changing this source convention.
 
-This repository contains a working Rust interpreter (`crates/lamlet`) and a CLI (`crates/lamlet-cli`). The
-render-lab presentation adapter, `lamlet-present`, is a separate project.
+This repository contains a working Rust interpreter (`crates/lamlet`), documents built to other formats
+(`crates/lamlet-doc`, [docs/documents.md](docs/documents.md)), and a CLI (`crates/lamlet-cli`). Tools for one kind
+of document are extensions in their own repositories, such as `lamlet-present` for narrated presentations.
 
 ## Documentation
 

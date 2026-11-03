@@ -197,3 +197,28 @@ fn the_content_package_is_available_to_every_command() {
     assert_eq!(code, 0);
     std::fs::remove_dir_all(&dir).ok();
 }
+
+#[cfg(unix)]
+#[test]
+fn unknown_commands_run_extensions_from_the_path() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = std::env::temp_dir().join(format!("lamlet-cli-ext-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let ext = dir.join("lamlet-hello");
+    std::fs::write(&ext, "#!/bin/sh\necho \"hello $*\"\n[ -n \"$LAMLET\" ] && echo has-lamlet\nexit 3\n").unwrap();
+    std::fs::set_permissions(&ext, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let path = format!("{}:{}", dir.display(), std::env::var("PATH").unwrap_or_default());
+    let run = |args: &[&str], cwd: &std::path::Path| Command::new(env!("CARGO_BIN_EXE_lamlet")).args(args).env("PATH", &path).current_dir(cwd).output().unwrap();
+    let out = run(&["hello", "a", "b"], &dir);
+    assert_eq!(out.status.code(), Some(3), "the extension's exit status is lamlet's");
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "hello a b\nhas-lamlet\n");
+    // A file of that name is run as a document instead, and a name with no extension is read as a file.
+    let docs = dir.join("docs");
+    std::fs::create_dir_all(&docs).unwrap();
+    std::fs::write(docs.join("hello"), "just text\n").unwrap();
+    assert_eq!(String::from_utf8_lossy(&run(&["hello"], &docs).stdout), "just text\n");
+    let out = run(&["nothing-here"], &dir);
+    assert_eq!(out.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("reading nothing-here"));
+    std::fs::remove_dir_all(&dir).ok();
+}

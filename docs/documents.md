@@ -153,13 +153,34 @@ The falloff is ${say {math "1/d^2"} "one over d squared"}.
 - **Translations.** `lamlet build zh.lam --to speech --align en.lam` checks that the translation has the same
   sections, the same number of paragraphs in each, and no anchors or spans (the cues belong to the original).
 
-## 6. The prepared IR
+## 6. Extensions
+
+Tools for one kind of document live outside Lamlet, as *extensions*. `lamlet NAME ARGS...` runs the program
+`lamlet-NAME` with `ARGS`, when `NAME` is neither a command nor a file, as `git` and `cargo` do. The extension
+gets the path of the `lamlet` program in the `LAMLET` environment variable.
+
+An extension is a git repository with a Rust program that depends on `lamlet` and `lamlet-doc` by git tag:
+
+```sh
+cargo install --git https://github.com/OppositeNor/lamlet-present
+lamlet present schedule deck.lam --fps 30        # runs lamlet-present schedule deck.lam --fps 30
+```
+
+There is no package registry. An extension carries the Lamlet packages it defines inside the program, and can
+write them out for other tools (`lamlet present source > present.lam`, then `lamlet build deck.lam --package
+present=present.lam`).
+
+`lamlet-present` is the extension for narrated presentations: a document whose headings are sections and whose
+paragraphs are sentences, timed from measured speech, with cues, animation curves, and slides. It builds on the
+speech backend (section 5).
+
+## 7. The prepared IR
 
 `lamlet build page.lam --to ir --prepared` writes the IR without evaluating the document. Regions computed during
 the check (static bindings, `$[% ...]`) have their values, and the others are holes
 (`{"type": "hole", "region": 3}`) for a host that evaluates them later.
 
-## 7. From Rust
+## 8. From Rust
 
 ```rust
 use lamlet::embed::*;

@@ -24,6 +24,8 @@ bytecode version (`BYTECODE_VERSION`) are tracked separately from the crate vers
 - The `content` package (always available in the CLI, `lamlet_doc::CONTENT_SOURCE` for hosts): emphasis, links,
   images, code, formulas, headings, lists, tables, code blocks, named spans and groups, raw markup, and speech
   cues (`say`, `anchor`, `pause`), as typed values.
+- Extensions: `lamlet NAME ARGS...` runs `lamlet-NAME ARGS...` from the PATH when NAME is not a command or a
+  file, with the `lamlet` program's path in `LAMLET`. Narrated presentations are the extension `lamlet-present`.
 - `lamlet build FILE [-o OUT] [--to text|md|html|ir|speech]`: the format from `--to` or the extension of `OUT`.
   `--prose commonmark` parses prose as CommonMark (a subset), so one source builds to every format;
   `--standalone` writes an HTML page, `--prepared` the IR without evaluating, and `--align` checks a translation

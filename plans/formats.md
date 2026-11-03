@@ -17,8 +17,9 @@ synthetic documents and hosts.
 
 Status: phases 1 to 7 implemented (2026-11-02, unreleased), in `crates/lamlet-doc` and `lamlet build`; the
 LaTeX backend (phase 5's "after these") is not. In compiler terms: the `lamlet` crate is the frontend,
-`lamlet_doc::lower` and `lamlet_doc::prose` are lowering, and `lamlet_doc::backend` holds the backends. Where the
-implementation differs from the text below:
+`lamlet_doc::lower` and `lamlet_doc::prose` are lowering, and `lamlet_doc::backend` holds the backends. Narrated presentations, built on
+the speech backend, are the extension `lamlet-present` (`lamlet present ...`; see `docs/documents.md`,
+section 6). Where the implementation differs from the text below:
 
 - The speech backend gives `shown` as plain text, not as inlines.
 - Parsed prose is a CommonMark subset (`lamlet_doc::prose` lists it), not all of CommonMark, and it lives in

@@ -20,6 +20,7 @@ use crate::content::Piece;
 use crate::ir::{Attrs, Block, Inline};
 use crate::{Error, COMMONMARK};
 use lamlet::embed::Location;
+use std::cell::RefCell;
 
 const FIRST_SLOT: u32 = 0xE000;
 const LAST_SLOT: u32 = 0xF8FF;
@@ -64,7 +65,8 @@ pub fn parse(pieces: Vec<Piece>) -> Result<Vec<Block>, Error> {
             "a fenced code block (``` or ~~~) is not Lamlet syntax: write the block as ${codeBlock \"lang\" \"code\"} (the `content` package)",
         ));
     }
-    let p = Parser { slots, at };
+    let lines: Vec<Line> = lines.iter().enumerate().map(|(i, l)| (*l, lines_at.get(i).cloned().flatten())).collect();
+    let p = Parser { slots, at: RefCell::new(at) };
     p.blocks(&lines)
 }
 
@@ -80,9 +82,13 @@ fn is_slot(c: char) -> bool {
     (FIRST_SLOT..=LAST_SLOT).contains(&(c as u32))
 }
 
+/// A line of prose and where it starts in the source.
+type Line<'a> = (&'a str, Option<Location>);
+
 struct Parser {
     slots: Vec<Piece>,
-    at: Option<Location>,
+    /// The position of the block being parsed: its first line's.
+    at: RefCell<Option<Location>>,
 }
 
 fn indent(line: &str) -> usize {
@@ -244,11 +250,19 @@ impl Parser {
         }
     }
 
-    fn blocks(&self, lines: &[&str]) -> Result<Vec<Block>, Error> {
+    /// The position of the block being parsed.
+    fn here(&self) -> Option<Location> {
+        self.at.borrow().clone()
+    }
+
+    fn blocks(&self, lines: &[Line]) -> Result<Vec<Block>, Error> {
         let mut out = Vec::new();
         let mut i = 0;
         while i < lines.len() {
-            let line = lines[i];
+            let line = lines[i].0;
+            if lines[i].1.is_some() {
+                *self.at.borrow_mut() = lines[i].1.clone();
+            }
             if line.trim().is_empty() {
                 i += 1;
             } else if let Some(b) = self.block_slot(line) {
@@ -262,12 +276,12 @@ impl Parser {
                 let (block, next) = self.list(lines, i, ordered)?;
                 out.push(block);
                 i = next;
-            } else if line.contains('|') && i + 1 < lines.len() && is_delimiter_row(lines[i + 1]) {
+            } else if line.contains('|') && i + 1 < lines.len() && is_delimiter_row(lines[i + 1].0) {
                 let header = cells(line);
                 let mut rows = Vec::new();
                 i += 2;
-                while i < lines.len() && !lines[i].trim().is_empty() && lines[i].contains('|') {
-                    let mut r = cells(lines[i]);
+                while i < lines.len() && !lines[i].0.trim().is_empty() && lines[i].0.contains('|') {
+                    let mut r = cells(lines[i].0);
                     r.resize(header.len(), String::new());
                     rows.push(r);
                     i += 1;
@@ -278,10 +292,10 @@ impl Parser {
             } else {
                 let start = i;
                 i += 1;
-                while i < lines.len() && !lines[i].trim().is_empty() && !starts_block(lines[i]) && self.block_slot(lines[i]).is_none() {
+                while i < lines.len() && !lines[i].0.trim().is_empty() && !starts_block(lines[i].0) && self.block_slot(lines[i].0).is_none() {
                     i += 1;
                 }
-                let text: Vec<&str> = lines[start..i].iter().map(|l| l.trim_start()).collect();
+                let text: Vec<&str> = lines[start..i].iter().map(|l| l.0.trim_start()).collect();
                 out.push(Block::Paragraph(self.inlines(&text.join("\n"))?));
             }
         }
@@ -289,33 +303,33 @@ impl Parser {
     }
 
     /// A list starting at line `start`; returns it and the index after it.
-    fn list(&self, lines: &[&str], start: usize, ordered: bool) -> Result<(Block, usize), Error> {
+    fn list(&self, lines: &[Line], start: usize, ordered: bool) -> Result<(Block, usize), Error> {
         let mut items = Vec::new();
         let mut i = start;
         while i < lines.len() {
-            let Some((o, width)) = list_marker(lines[i]) else { break };
+            let Some((o, width)) = list_marker(lines[i].0) else { break };
             if o != ordered {
                 break;
             }
-            let first = lines[i].get(width..).unwrap_or("");
-            let mut body = vec![first];
+            let first = lines[i].0.get(width..).unwrap_or("");
+            let mut body: Vec<Line> = vec![(first, lines[i].1.clone())];
             i += 1;
             while i < lines.len() {
-                let l = lines[i];
+                let (l, at) = (lines[i].0, &lines[i].1);
                 if l.trim().is_empty() {
                     // A blank line continues the item only if indented content follows.
-                    let next = lines[i + 1..].iter().find(|l| !l.trim().is_empty());
-                    if next.is_some_and(|n| indent(n) >= width) {
-                        body.push("");
+                    let next = lines[i + 1..].iter().find(|l| !l.0.trim().is_empty());
+                    if next.is_some_and(|n| indent(n.0) >= width) {
+                        body.push(("", None));
                         i += 1;
                         continue;
                     }
                     break;
                 }
                 if indent(l) >= width {
-                    body.push(&l[width..]);
-                } else if list_marker(l).is_none() && !starts_block(l) && body.last().is_some_and(|b| !b.trim().is_empty()) {
-                    body.push(l.trim_start()); // a lazy continuation of the paragraph
+                    body.push((&l[width..], at.clone()));
+                } else if list_marker(l).is_none() && !starts_block(l) && body.last().is_some_and(|b| !b.0.trim().is_empty()) {
+                    body.push((l.trim_start(), at.clone())); // a lazy continuation of the paragraph
                 } else {
                     break;
                 }
@@ -324,10 +338,10 @@ impl Parser {
             items.push(self.blocks(&body)?);
             // Blank lines between items keep the list going.
             let mut j = i;
-            while j < lines.len() && lines[j].trim().is_empty() {
+            while j < lines.len() && lines[j].0.trim().is_empty() {
                 j += 1;
             }
-            if j < lines.len() && list_marker(lines[j]).is_some_and(|(o, _)| o == ordered) {
+            if j < lines.len() && list_marker(lines[j].0).is_some_and(|(o, _)| o == ordered) {
                 i = j;
             } else {
                 break;
@@ -351,7 +365,7 @@ impl Parser {
             if is_slot(c) {
                 match self.slot(c) {
                     Piece::Inline(i) => out.push_str(&crate::backend::text::write(&crate::Doc { blocks: vec![Block::Plain(vec![i.clone()])] })?),
-                    Piece::Block(_) => return Err(Error::at(&self.at, "a block region inside code or an image's text")),
+                    Piece::Block(_) => return Err(Error::at(&self.here(), "a block region inside code or an image's text")),
                 }
             } else {
                 out.push(c);
@@ -371,7 +385,7 @@ impl Parser {
 
     fn flush(&self, out: &mut Vec<Inline>, text: &mut String) {
         if !text.is_empty() {
-            out.push(Inline::Text { text: std::mem::take(text), at: self.at.clone() });
+            out.push(Inline::Text { text: std::mem::take(text), at: self.here() });
         }
     }
 
@@ -410,7 +424,7 @@ impl Parser {
                 match self.slot(ch) {
                     Piece::Inline(x) => out.push(x.clone()),
                     Piece::Block(_) => {
-                        return Err(Error::at(&self.at, "a region whose content is a block stands inside a line; put it on lines of its own"));
+                        return Err(Error::at(&self.here(), "a region whose content is a block stands inside a line; put it on lines of its own"));
                     }
                 }
                 i += 1;
@@ -424,7 +438,7 @@ impl Parser {
                         code = code[1..code.len() - 1].to_string();
                     }
                     self.flush(out, text);
-                    out.push(Inline::Code { text: self.plain(&code)?, at: self.at.clone() });
+                    out.push(Inline::Code { text: self.plain(&code)?, at: self.here() });
                     i = end + n;
                     continue;
                 }
@@ -436,7 +450,7 @@ impl Parser {
                 if let Some((label, href, title, next)) = link_parts(c, i + 1) {
                     self.flush(out, text);
                     let alt = self.plain(&label.iter().collect::<String>())?;
-                    out.push(Inline::Image { src: href, alt, title, at: self.at.clone() });
+                    out.push(Inline::Image { src: href, alt, title, at: self.here() });
                     i = next;
                     continue;
                 }
@@ -458,7 +472,7 @@ impl Parser {
                     let url: String = c[i + 1..i + 1 + end].iter().collect();
                     if url.contains(':') && !url.contains([' ', '<']) && url.split(':').next().is_some_and(|s| !s.is_empty() && s.chars().all(|x| x.is_ascii_alphanumeric() || "+.-".contains(x))) {
                         self.flush(out, text);
-                        out.push(Inline::Link { href: url.clone(), inlines: vec![Inline::Text { text: url, at: self.at.clone() }] });
+                        out.push(Inline::Link { href: url.clone(), inlines: vec![Inline::Text { text: url, at: self.here() }] });
                         i += end + 2;
                         continue;
                     }

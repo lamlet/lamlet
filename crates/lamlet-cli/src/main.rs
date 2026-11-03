@@ -20,6 +20,7 @@ const USAGE: &str = "usage:
   lamlet run     FILE (the same)
   lamlet build   FILE [-o OUT] [--to FORMAT] [--prose FORMAT] [--standalone] [--prepared] [--align ORIGINAL]
                  [--package NAME=PATH]... [--input KEY=JSON]...
+  lamlet NAME    ARGS...   (an extension: runs `lamlet-NAME ARGS...` from the PATH)
   lamlet check   FILE [--package NAME=PATH]... [--require-linked]
   lamlet prepare FILE [--package NAME=PATH]...
   lamlet eval    FILE [--package NAME=PATH]... [--input KEY=JSON]... [--max-instructions N]
@@ -36,6 +37,10 @@ extension of OUT, and is `text` without either. Prose is copied as markup of the
 HTML page; --prepared writes the IR without evaluating (runtime regions are holes); --align checks a
 translation's speech against its ORIGINAL. The `content` package (images, links, tables, ...) is always
 available.
+
+Extensions: `lamlet NAME ARGS...` runs the program `lamlet-NAME` from the PATH with ARGS, when NAME is not a
+command or a file. Install one with `cargo install --git URL`; for example `lamlet present` is `lamlet-present`.
+The extension gets the `lamlet` program's path in the LAMLET environment variable.
 
 `call` evaluates a statically available top-level function of FILE with JSON arguments, converted using the
 function's parameter types (numbers, strings, booleans, null for Unit, arrays for lists, objects for records).
@@ -73,6 +78,9 @@ struct Build {
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if let Some(code) = extension(&args) {
+        std::process::exit(code);
+    }
     let req = match parse_args(&args) {
         Ok(r) => r,
         Err(m) => {
@@ -89,6 +97,38 @@ fn main() {
 }
 
 const COMMANDS: &[&str] = &["run", "build", "check", "prepare", "eval", "call", "batch"];
+
+/// `lamlet NAME ARGS...` for an extension: when NAME is not a command or an existing file, run `lamlet-NAME ARGS...`
+/// (the system finds it on the PATH). On Unix it replaces this process; elsewhere it runs and returns its exit
+/// status. Returns `None` when there is no such program, so NAME is read as a file.
+fn extension(args: &[String]) -> Option<i32> {
+    let name = args.first()?;
+    let plain = !name.is_empty() && !name.starts_with('-') && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
+    if !plain || COMMANDS.contains(&name.as_str()) || std::path::Path::new(name).exists() {
+        return None;
+    }
+    let program = format!("lamlet-{}", name);
+    let mut cmd = std::process::Command::new(&program);
+    cmd.args(&args[1..]);
+    if let Ok(me) = std::env::current_exe() {
+        cmd.env("LAMLET", me);
+    }
+    #[cfg(unix)]
+    let result = {
+        use std::os::unix::process::CommandExt;
+        Err::<i32, _>(cmd.exec()) // returns only if the program could not be started
+    };
+    #[cfg(not(unix))]
+    let result = cmd.status().map(|s| s.code().unwrap_or(1));
+    match result {
+        Ok(code) => Some(code),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => {
+            eprintln!("lamlet: running {}: {}", program, e);
+            Some(2)
+        }
+    }
+}
 
 fn parse_args(args: &[String]) -> Result<Request, String> {
     let first = args.first().ok_or("missing command")?;
