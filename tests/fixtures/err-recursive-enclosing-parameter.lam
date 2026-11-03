@@ -1,0 +1,4 @@
+$[Import* std]
+A nested declaration cannot capture the parameters of the declaration whose body it is in.
+$[Type {Out a} rollOut unrollOut {{^ {} [Type In rollIn unrollIn {Struct {' {Field "x" a} {Field "n" {Option In}}}}] In}}]
+expect-error: type: the body of type `In` uses `a`, a type parameter of an enclosing [Type] declaration

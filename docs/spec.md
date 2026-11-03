@@ -75,6 +75,7 @@ A bracket form's head is a keyword from a closed set. It is never a binding and 
 | `[Import p]`, `[Import* p]`, `[ImportAs p a]` | declaration | definition context | no | namespace (and exports) | compile | no |
 | `[Native x T "id" Pure\|Static\|Runtime]` | declaration | definition context | no | `x` | compile | `T`, as if written `[% T]` |
 | `[NativeType x "id"]` | declaration | definition context | no | `x : Type` | compile | no |
+| `[Type {T a...} roll unroll e]`, `[Type T roll unroll e]` | declaration | definition context | no | `T`, `roll`, `unroll` | compile | `e`, as if written `[% e]` (§4.4) |
 | `[Macro !m {pattern template}...]` | declaration | definition context | no | `!m` | compile | no (syntax) |
 | `[% e]` | stage boundary | expression | yes | no | static | `e`, during checking |
 
@@ -249,6 +250,7 @@ effect.
     | {l1: τ1, ..., ln: τn}         structural record, labels sorted
     | <l1: τ1, ..., ln: τn>         structural variant; <> is Never
     | Native("id")                  opaque host type
+    | T(τ1..τn)                     declared iso-recursive type (§4.4)
     | α                             inference variable, possibly constrained
 ```
 
@@ -258,7 +260,7 @@ Constraints on variables:
 |---|---|
 | `Num` | Int, Float |
 | `Ord` | Int, Float, String |
-| `Eq` | anything except functions and opaque values, recursively |
+| `Eq` | anything except functions and opaque values, recursively; a recursive type when its body is (§4.4) |
 | `Scalar` | Int, Float, String, Bool, Unit |
 | `has .l: τ` | a record with field `l: τ` |
 | `has #l: τ` | a variant with alternative `l: τ` |
@@ -310,19 +312,20 @@ Every function type carries a capability variable:
 
 ### 4.3 Type values and computed types
 
-`Type` is an ordinary, first-order data type of ground descriptors: no variables, no quantifiers, no recursion.
-Type values can be built at any stage with ordinary pure functions: `K::listType`, `K::functionType`,
-`K::recordType`, and `K::variantType`.
+`Type` is an ordinary, first-order data type of ground descriptors: no variables and no quantifiers. A Type value
+may name a declared recursive type (§4.4), but it is never cyclic. Type values can be built at any stage with
+ordinary pure functions: `K::listType`, `K::functionType`, `K::recordType`, and `K::variantType`, and with the
+constructors that `[Type ...]` declarations bind.
 
 The supported fragment of computed types:
 
-- Computed types appear only where the checker reads a Type, which is two places: the type operand of `{: e T}`
-  and the signature of `[Native ...]`.
+- Computed types appear only where the checker reads a Type, which is three places: the type operand of
+  `{: e T}`, the signature of `[Native ...]`, and the body of `[Type ...]` (§4.4).
 - There, the operand is evaluated at compile time, as if written `[% T]`: `{: xs {List Int}}` and
   `[Native f {Fn {' Int} Int} "id" Pure]` need no `[% ...]`. Like any `[% ...]`, it may use only static
   bindings.
 - The checker reads the resulting constant and converts it to a type. It evaluates code to obtain a type only in
-  these two positions.
+  these three positions.
 
 Hence:
 
@@ -331,7 +334,46 @@ Hence:
 - A Type computation that does not terminate is a static `limit` error.
 
 Equality of Type values is structural equality of normalized descriptors: record fields and variant
-alternatives are sorted by label.
+alternatives are sorted by label, and recursive types compare by their definitions (§4.4).
+
+### 4.4 Recursive types
+
+`[Type {T a1 ... an} roll unroll e]` declares an iso-recursive type `T(a1..an) = μT. e`. With no parameters
+it is written `[Type T roll unroll e]`.
+
+- **The body.** `e` is a Type operand, evaluated at compile time as if written `[% e]`. While it is evaluated,
+  `T` and each `ai` are bound to placeholder Types. In the body, `T` is the recursive occurrence itself, with
+  the same arguments; it is a Type, not a constructor, so every recursive type is *regular*: `{T {List a}}`
+  cannot be written inside `T`'s body.
+- **Placeholders stay in the body.** The result must be a Type built from the placeholders. A placeholder used
+  anywhere else (an ascription or a native signature, inside the body or not) is a type error, and so is a
+  nested `[Type ...]` whose body uses the placeholders of an enclosing one. A body that is just `T` is an error.
+- **Bindings.** The declaration binds three names in the current scope, all static:
+
+  ```text
+  T      : Fn([Type × n], Type)      (a Type when n = 0)
+  roll   : ∀ a1..an. Fn([e[T(a1..an)/T]], T(a1..an))
+  unroll : ∀ a1..an. Fn([T(a1..an)], e[T(a1..an)/T])
+  ```
+
+  A type's three names must differ, and its parameters must be distinct.
+- **Iso-recursion.** `T(τ1..τn)` and its unfolding `e[T(τ..)/T, τi/ai]` are different types. Only `roll` and
+  `unroll` convert between them, so unification never unfolds a type and stays first order. In particular a
+  recursive value cannot be matched, nor its fields read, before it is unrolled.
+- **Structural identity.** Two declarations with the same number of parameters and the same body define the
+  same type, whatever their names: `T(τ..)` and `U(σ..)` unify when the definitions are equal and their
+  arguments unify. Names only serve display. No registry is involved, so declaring types is order-independent.
+- **Values.** `roll` and `unroll` are the identity at run time. A recursive value is displayed as its structure.
+  They are ordinary functions: calling one is a call, so `[# x {roll ...}]` is a runtime binding (§5).
+- **Effects.** A function type inside a recursive type keeps its capability variable: `T(τ..)` carries one per
+  function type its body contains, shared between the type and its unfoldings, so rolling a value never hides
+  what calling its functions requires (§4.2).
+- **Constraints.** `Eq` holds of `T(τ..)` when it holds of the body, assuming it of `T` itself: it requires
+  `Eq` of the arguments the body compares, and fails if the body contains a function or an opaque type. `Num`,
+  `Ord`, `Scalar`, `has .l`, `has #l`, and `cases` never hold of a recursive type.
+- **Display.** A recursive type is shown as `T(τ1, ..., τn)`, or `T` with no parameters.
+- **Limits.** Mutually recursive groups are not supported; a native signature cannot contain a recursive type in
+  v1.
 
 ## 5. Stages
 
@@ -339,7 +381,7 @@ Every binding has a stage, S (static) or R (runtime).
 
 | A binding `[# x e]` is static (S) when `e` is | Otherwise |
 |---|---|
-| a literal, a static name, `[% e']`, a lambda whose free variables are all S, a label function, a list/record literal or template whose parts are all S, or a Native / NativeType / import | R |
+| a literal, a static name, `[% e']`, a lambda whose free variables are all S, a label function, a list/record literal or template whose parts are all S, or a Native / NativeType / Type / import | R |
 
 This is a syntactic, predictable rule. The checker never decides to evaluate early on its own: `[# x {+ 1 2}]`
 is R, and `[# x [% {+ 1 2}]]` is S.
@@ -475,7 +517,8 @@ A body is its byte length as a u64 LE, followed by the UTF-8 bytes. Functions an
 ## 9. Natives and host capabilities
 
 - **Declaration.** `[Native x T "api-id" A]` declares a callable whose concrete type `T` (static, fixed arity,
-  no function arguments in v1) and availability `A` must match the host registry exactly.
+  no function arguments and no recursive types in v1) and availability `A` must match the host registry
+  exactly.
 - **Effects.** `A = Runtime` or `A = Static` adds that capability to the function type. `Pure` adds nothing.
 - **Validation.** Arguments and results are checked against the declared descriptors at the boundary.
 - **Capabilities.** Named capabilities ("secrets") are granted per evaluation by the host context, and are

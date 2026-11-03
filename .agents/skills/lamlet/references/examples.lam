@@ -115,6 +115,19 @@ ${map {' 0.0 1.0 2.0} {tween 0.0 10.0 2.0}} ${fixed {{tween 0.0 10.0 2.0} 1.0} 1
 expect: [0.0, 4.999999999999999, 10.0]
 expect: "5.0"
 
+Recursive types are declared with roll and unroll functions; a value is unrolled before it is matched.
+$[Type {Tree a} rollTree unrollTree
+  {Variant {' {Field "leaf" Unit} {Field "node" {Struct {' {Field "l" Tree} {Field "v" a} {Field "r" Tree}}}}}}]
+$[# leaf [% {rollTree {#leaf unit}}]]
+$[# {node l v r} {rollTree {#node {. l l v v r r}}}]
+$[# {insert t x} {!case {unrollTree t}
+                   {leaf u {node leaf x leaf}}
+                   {node n {!if {< x {.v n}} {node {insert {.l n} x} {.v n} {.r n}} {node {.l n} {.v n} {insert {.r n} x}}}}}]
+$[# {inorder t} {!case {unrollTree t} {leaf u {'}} {node n {flatten {' {inorder {.l n}} {' {.v n}} {inorder {.r n}}}}}}]
+${inorder {fold {' 5 2 8 1} leaf insert}} ${Tree String}
+expect: [1, 2, 5, 8]
+expect: Tree(String)
+
 User macros are hygienic syntax rewrites.
 $[Macro !unless {{c a b} {!if c b a}}]
 $[Macro !swap {{a b} {' b a}}]

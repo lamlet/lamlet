@@ -558,6 +558,7 @@ fn json_to_typed(j: &Json, t: &TypeDesc) -> Result<Value, String> {
             let payload = if *pt == TypeDesc::Unit && j.get("value").is_none() { Value::Unit } else { json_to_typed(&j["value"], pt)? };
             Value::Variant(Rc::new((n.clone(), payload)))
         }
+        TypeDesc::Mu(def, args) => json_to_typed(j, &def.unfold(args))?,
         _ => return Err(format!("{} values cannot be passed from JSON", t)),
     })
 }

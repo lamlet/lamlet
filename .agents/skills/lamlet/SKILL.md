@@ -75,6 +75,7 @@ f"{Hi "$name", ${e}}"   template, a String: text exactly as written up to the fi
 [Macro !name {pattern template} ...]                   pattern macro
 [Native name {Fn {' A B} R} "api.id/x" Pure|Static|Runtime]   typed host function (signature runs as [% …])
 [NativeType Name "type.id"]                            opaque host type
+[Type {T a} rollT unrollT body]  [Type T rollT unrollT body]   iso-recursive type (body runs as [% …]; §3)
 ```
 
 Spacing is significant around the dot:
@@ -130,6 +131,7 @@ A `.lam` file is a document (spec §10). Only `$`-spellings are active:
 
 ```text
 Unit Bool Int Float String Type   List(a)   Fn([a, b], r)   {x: Int, y: a}   <none: Unit, some: a>   Native("id")
+Tree(a)                           a declared recursive type
 ```
 
 - **Int** is signed 64-bit, and overflow is a runtime error. **Float** is finite binary64. Numeric operators are
@@ -155,9 +157,34 @@ Unit Bool Int Float String Type   List(a)   Fn([a, b], r)   {x: Int, y: a}   <no
   them to the caller, ascription cannot remove them, and they show in printed types (`Fn([], Float) !Runtime`).
 - **No higher-rank types.** A lambda *parameter* used at two types must be let-bound instead.
 
+### Recursive types
+
+`[Type {Tree a} rollTree unrollTree body]` declares an *iso-recursive* type. The body is a static Type
+expression in which `Tree` (with no arguments) is the recursive occurrence and `a` the parameter:
+
+```text
+[Type {Tree a} rollTree unrollTree
+  {Variant {' {Field "leaf" Unit} {Field "node" {Struct {' {Field "l" Tree} {Field "v" a} {Field "r" Tree}}}}}}]
+```
+
+- It binds `Tree : Fn([Type], Type)` (with no parameters, `Tree` is a Type), and `rollTree` and `unrollTree`, which
+  convert between `Tree(a)` and its structure `<leaf: Unit, node: {l: Tree(a), r: Tree(a), v: a}>`.
+- **A `Tree(a)` is not a variant.** Build it with `{rollTree {#node …}}`, and take it apart with
+  `{!case {unrollTree t} …}`. Matching a value or reading its fields directly is a type error that says so.
+- Both functions are the identity at run time, and a value displays as its structure. They are calls, so
+  `[# leaf {rollTree {#leaf unit}}]` is a runtime binding; write `[# leaf [% {rollTree {#leaf unit}}]]` for a
+  static one.
+- **Structural identity.** Two declarations with the same body are the same type.
+- **Regular only.** Inside the body, `Tree` is a Type, not a constructor: `{Tree {List a}}` there is an error.
+  Recursive types nest freely through arguments (`{List Tree}`, `{Option Tree}`, another declared type).
+- **Functions are allowed** (lazy streams: `{Fn {'} Stream}`), and their capabilities survive rolling.
+- `Eq` holds when the body supports it. There are no mutually recursive groups, and no recursive types in native
+  signatures.
+
 ### Types as values
 
-`Type` values are ground data: no variables, no recursive types. Build them with these functions:
+`Type` values are ground data: no variables, and never cyclic (a recursive type is named, as `Tree(Int)`). Build
+them with these functions:
 
 | Function | Builds |
 |---|---|
@@ -167,6 +194,7 @@ Unit Bool Int Float String Type   List(a)   Fn([a, b], r)   {x: Int, y: a}   <no
 | `{Struct {' {Field "x" Int} ...}}` | a record type |
 | `{Variant {' {Field "a" T} ...}}` | a variant type |
 | `{Option T}`, `{Pair A B}` | the std option and pair types |
+| `{Tree T}` | a declared recursive type, applied |
 
 Use computed types for checking. An ascription's type and a native's signature are evaluated at compile time
 (`{: xs {List Int}}`, `[Native f {Fn {' Int} Int} …]`); a *named* type must be a static binding:
@@ -285,8 +313,8 @@ from data, and curve combinators. `cargo test` checks every `expect:` line in bo
   (`lerp`, `clamp`, `sin`, `cos`, `pow`, `pi`).
 - **Pipelines:** `xs.f.g` reads left to right, but only the last step of a head chain takes arguments. For
   multi-argument stages, nest calls or use `!pipe`.
-- **Trees and graphs:** List is the only recursive type, so store nodes in a list and refer to children by
-  index (patterns §3).
+- **Trees:** declare a recursive type with `[Type …]` (§3). **Graphs** with sharing or cycles: store nodes in a
+  list and refer to them by index (patterns §3).
 - **Failure a caller can handle:** return an option or a variant with a reason; `error` aborts everything.
 
 ### Names
@@ -335,7 +363,8 @@ Don't emulate these by guessing at syntax:
   - mutation, references, or exceptions you can catch
   - partial application, variadic functions, or default arguments
   - parentheses or infix operators
-  - type classes, method dispatch by type, mutual recursion, or recursive types (List is the only one)
+  - type classes, method dispatch by type, mutual recursion, mutually recursive or non-regular types, or
+    equi-recursive types (a recursive type is never its structure: roll and unroll it)
   - polymorphic computed types (`{List a}`)
   - higher-rank types
   - string indexing primitives (use `chars`, `substr`, `nth`)

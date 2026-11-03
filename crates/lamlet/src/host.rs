@@ -145,6 +145,9 @@ impl NativeRegistry {
                 Err(format!("native type {:?} is used in a signature but not registered", id))
             }
             TypeDesc::Func(..) => Err("function-typed native arguments/results (callbacks) are not supported in v1".into()),
+            TypeDesc::Mu(..) | TypeDesc::Bound(_) | TypeDesc::Param(..) => {
+                Err("recursive types in native arguments/results are not supported in v1".into())
+            }
             TypeDesc::List(t) => self.check_marshalable(t),
             TypeDesc::Record(fs) | TypeDesc::Variant(fs) => fs.iter().try_for_each(|(_, t)| self.check_marshalable(t)),
             _ => Ok(()),
@@ -243,6 +246,7 @@ pub fn conforms(v: &Value, t: &TypeDesc) -> bool {
         }
         (TypeDesc::Variant(alts), Value::Variant(x)) => alts.iter().any(|(n, t)| *n == x.0 && conforms(&x.1, t)),
         (TypeDesc::Opaque(id), Value::Opaque(o)) => *id == o.type_id,
+        (TypeDesc::Mu(def, args), x) => conforms(x, &def.unfold(args)),
         _ => false,
     }
 }

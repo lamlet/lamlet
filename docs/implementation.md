@@ -48,12 +48,13 @@ makes them statically available (spec §5).
 | Scanner, reader, parser, scopes, packages, imports, natives, opaque types, capabilities | Implemented and tested |
 | Core calculus, eager evaluation, recursive lambdas, tail calls | Implemented and tested |
 | HM inference with constraints; records and variants with row-style field, alternative, and case constraints | Implemented and tested |
+| Iso-recursive types (`[Type ...]`): structural identity, regular recursion, effect slots | Implemented and tested |
 | Static evaluation, syntactic stage rule, effect checking | Implemented and tested |
 | Pattern macros with hygiene and budgets | Implemented and tested |
 | Deterministic math, hash | Implemented and tested (bits pinned) |
 | CLI (`lamlet FILE`, `build`, `check`/`eval`/`call`/`batch`, extensions) | Implemented and tested |
 | Benchmarks (`crates/lamlet/benches/embed.rs`, `cargo bench -p lamlet --bench embed`) | Implemented; CI gates linear scaling and instruction counts |
-| Procedural macros, portable artifacts, multiple diagnostics, mutual recursion, abstract types | Not implemented |
+| Procedural macros, portable artifacts, multiple diagnostics, mutual recursion (of functions or types), abstract types, recursive types in native signatures | Not implemented |
 
 ## Tests
 

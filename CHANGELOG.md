@@ -12,6 +12,12 @@ is version 2.
 
 ### Added
 
+- Iso-recursive types: `[Type {Tree a} rollTree unrollTree body]` declares `Tree(a) = μTree. body`, where the
+  body is a static Type expression in which `Tree` is the recursive occurrence. It binds the constructor `Tree`
+  (a Type when there are no parameters) and `rollTree`/`unrollTree`, which convert between the type and its
+  structure and are the identity at run time. Identity is structural, recursion is regular, functions inside a
+  recursive type keep their capabilities, and `Eq` holds when the body supports it. Mutually recursive groups
+  and recursive types in native signatures are not supported. Language change: spec §4.4, rationale D15.
 - `Data`, the type of type-erased values, and `toData`, `Eq A: Fn([A], Data)` (also `K::toData` and
   `K::dataType`). `toData` keeps the value and forgets its static type, so values of different types can share
   one List; a host reads them as `embed::Data`. `Data` is `Eq` only and cannot be inspected in Lamlet. Natives
@@ -32,6 +38,8 @@ is version 2.
 
 ### Changed
 
+- `TypeDesc` has the variants `Mu` (an applied recursive type, with its `MuDef`), `Bound`, and `Param`, and
+  `embed::TypeData` has `Recursive` and `Bound`. Exhaustive matches on either must handle them.
 - lamlet-doc: `ir::Attrs` is `Vec<(String, Data)>` and `ir::attr` returns `Option<&Data>`. Prose heading
   attributes are `Data::String`.
 - lamlet-doc: the IR's JSON is version 2 (`"lamletDoc": 2`): attributes are `[[key, value], ...]` with each value

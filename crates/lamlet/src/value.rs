@@ -5,7 +5,7 @@
 //! and reference counting releases everything without a cycle collector.
 
 use crate::bytecode::Code;
-use crate::types::TypeDesc;
+use crate::types::{MuDef, TypeDesc};
 use std::any::Any;
 use std::fmt;
 use std::rc::Rc;
@@ -32,7 +32,7 @@ pub enum Value {
     Opaque(Rc<OpaqueValue>),
 }
 
-/// Functions determined by labels in the source syntax.
+/// Functions determined by labels in the source syntax, or by a `[Type ...]` declaration.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LabelFn {
     /// `.l`: read field `l`.
@@ -45,12 +45,19 @@ pub enum LabelFn {
     Record(Vec<Rc<str>>),
     /// `{' e1 ... en}`: build a list of its n arguments (flat, so long literals do not nest).
     List(usize),
+    /// A recursive type's roll function: from its structure to the type. The identity on values.
+    Roll(Rc<MuDef>),
+    /// A recursive type's unroll function: from the type to its structure. The identity on values.
+    Unroll(Rc<MuDef>),
+    /// A recursive type's constructor: applies it to Type arguments, giving a Type.
+    TypeApply(Rc<MuDef>),
 }
 
 impl LabelFn {
     pub fn arity(&self) -> usize {
         match self {
-            LabelFn::Get(_) | LabelFn::Tag(_) => 1,
+            LabelFn::Get(_) | LabelFn::Tag(_) | LabelFn::Roll(_) | LabelFn::Unroll(_) => 1,
+            LabelFn::TypeApply(def) => def.params.len(),
             LabelFn::Set(_) => 2,
             LabelFn::Record(ls) => ls.len(),
             LabelFn::List(n) => *n,
@@ -316,6 +323,9 @@ fn write_value(out: &mut String, v: &Value) {
             LabelFn::Tag(n) => out.push_str(&format!("<constructor #{}>", n)),
             LabelFn::Record(_) => out.push_str("<record constructor>"),
             LabelFn::List(_) => out.push_str("<list constructor>"),
+            LabelFn::Roll(def) => out.push_str(&format!("<roll {}>", def.name)),
+            LabelFn::Unroll(def) => out.push_str(&format!("<unroll {}>", def.name)),
+            LabelFn::TypeApply(def) => out.push_str(&format!("<type constructor {}>", def.name)),
         },
         Value::Native(n) => out.push_str(&format!("<native {}>", n.api_id)),
         Value::Opaque(o) => out.push_str(&format!("<native value {}>", o.type_id)),

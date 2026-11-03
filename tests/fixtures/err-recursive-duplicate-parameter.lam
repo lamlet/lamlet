@@ -1,0 +1,3 @@
+$[Import* std]
+$[Type {T a a} rollT unrollT {Option T}]
+expect-error: name: `a` is named twice in the head of type `T`

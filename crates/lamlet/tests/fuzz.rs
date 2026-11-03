@@ -44,6 +44,9 @@ const TOKENS: &[&str] = &[
     // themselves.
     "[# f0 {^ {x} {' x}}]", "[# f1 {^ {x} {f0 {f0 x}}}]", "[# f2 {^ {x} {f1 {f1 x}}}]", "{f2 {f2 {f2 1}}}",
     "[# T [% {fold {range 0 500} Int {^ {t i} {List t}}}]]", "{!if true z {#node z}}", "{.x= z z}", "{^ {z} ",
+    // Recursive types.
+    "[Type {R a} rR uR {Option {List R}}]", "[Type N rN uN {Option N}]", "{rR {some {'}}}", "{uR ", "{rN none}",
+    "{R Int}", "{Fn {'} R}",
 ];
 
 fn mutate(rng: &mut Rng, base: &str, other: &str) -> String {

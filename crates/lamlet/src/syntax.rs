@@ -629,6 +629,17 @@ pub enum Decl {
     NativeType { name: String, name_span: Span, type_id: String, span: Span, doc: Option<String> },
     /// `[Macro !name {pattern template}...]`; `name` is the binding key (`!name`).
     Macro { name: String, name_span: Span, clauses: Vec<MacroClause>, span: Span, doc: Option<String> },
+    /// `[Type {name params...} roll unroll body]` (or a bare `name` with no parameters): a recursive type.
+    Type {
+        name: String,
+        name_span: Span,
+        params: Vec<(String, Span)>,
+        roll: (String, Span),
+        unroll: (String, Span),
+        body: Expr,
+        span: Span,
+        doc: Option<String>,
+    },
 }
 
 impl Decl {
@@ -638,14 +649,19 @@ impl Decl {
             | Decl::Import { span, .. }
             | Decl::Native { span, .. }
             | Decl::NativeType { span, .. }
-            | Decl::Macro { span, .. } => *span,
+            | Decl::Macro { span, .. }
+            | Decl::Type { span, .. } => *span,
         }
     }
 
     /// The declared name (binding key) and doc slot of documentable declarations.
     pub fn doc_slot(&mut self) -> Option<(&str, &mut Option<String>)> {
         match self {
-            Decl::Def { name, doc, .. } | Decl::Native { name, doc, .. } | Decl::NativeType { name, doc, .. } | Decl::Macro { name, doc, .. } => {
+            Decl::Def { name, doc, .. }
+            | Decl::Native { name, doc, .. }
+            | Decl::NativeType { name, doc, .. }
+            | Decl::Macro { name, doc, .. }
+            | Decl::Type { name, doc, .. } => {
                 Some((name.as_str(), doc))
             }
             Decl::Import { .. } => None,
@@ -885,6 +901,27 @@ fn bracket(items: &[Syntax], span: Span, doc: Option<String>) -> DResult<Item> {
             Item::Decls(vec![Decl::NativeType { name: n, name_span: ns, type_id, span, doc }])
         }
         "Macro" => macro_decl(items, span, doc)?,
+        "Type" => {
+            arity(items, 5, "`[Type {Name params...} roll unroll body]`", span)?;
+            let (n, ns, params) = match &items[1] {
+                Syntax::Brace(head, hspan) => {
+                    let (n, ns) = match head.first() {
+                        Some(h) => param(h, "a type name")?,
+                        None => return syntax_err("a type head `{Name params...}` needs a name", *hspan),
+                    };
+                    let params = head[1..].iter().map(|p| param(p, "a type parameter name")).collect::<DResult<Vec<_>>>()?;
+                    (n, ns, params)
+                }
+                other => {
+                    let (n, ns) = param(other, "a type name, or a type head `{Name params...}`")?;
+                    (n, ns, vec![])
+                }
+            };
+            let roll = param(&items[2], "the name of the roll function")?;
+            let unroll = param(&items[3], "the name of the unroll function")?;
+            let body = parse_expr(&items[4])?;
+            Item::Decls(vec![Decl::Type { name: n, name_span: ns, params, roll, unroll, body, span, doc }])
+        }
         _ => return syntax_err(format!("unknown bracket form `[{} ...]`", name), head.span()),
     };
     Ok(item)
@@ -936,7 +973,7 @@ fn bindings(items: &[Syntax], span: Span, mut doc: Option<String>) -> DResult<Ve
 fn is_decl_form(s: &Syntax) -> bool {
     match s {
         Syntax::Bracket(items, _, _) => {
-            matches!(items.first().and_then(|h| h.ident()), Some("#" | "Import" | "Import*" | "ImportAs" | "Native" | "NativeType" | "Macro"))
+            matches!(items.first().and_then(|h| h.ident()), Some("#" | "Import" | "Import*" | "ImportAs" | "Native" | "NativeType" | "Macro" | "Type"))
         }
         _ => false,
     }

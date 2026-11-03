@@ -1,0 +1,4 @@
+$[Import* std]
+A type parameter is a placeholder for building the body; it is not a type an expression can have.
+$[Type {Box a} rollBox unrollBox {Struct {' {Field "v" {: 1 a}} {Field "next" {Option Box}}}}]
+expect-error: type: `a` is a parameter of a [Type] declaration

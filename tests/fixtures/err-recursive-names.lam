@@ -1,0 +1,4 @@
+$[Import* std]
+A type, its roll function, and its unroll function need three distinct names.
+$[Type {T a} roll roll {Option T}]
+expect-error: name: type `T` needs distinct names

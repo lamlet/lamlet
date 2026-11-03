@@ -1,0 +1,58 @@
+$[Import* std]
+A `[Type]` declaration defines an iso-recursive type. In the body, the type's own name stands for the
+recursive occurrence, and `rollTree`/`unrollTree` convert between the type and its structure.
+$[Type {Tree a} rollTree unrollTree
+  {Variant {' {Field "leaf" Unit}
+              {Field "node" {Struct {' {Field "l" Tree} {Field "v" a} {Field "r" Tree}}}}}}]
+$[# leaf [% {rollTree {#leaf unit}}]]
+$[# {node l v r} {rollTree {#node {. l l v v r r}}}]
+$[# {sum t} {!case {unrollTree t} {leaf u 0} {node n {+ {+ {sum {.l n}} {.v n}} {sum {.r n}}}}}]
+$[# {size t} {!case {unrollTree t} {leaf u 0} {node n {+ {+ {size {.l n}} 1} {size {.r n}}}}}]
+$[# t {node {node leaf 1 leaf} 2 {node leaf 3 leaf}}]
+${sum t}
+expect: 6
+Rolling is the identity on values, so a recursive value displays as its structure.
+$t
+expect: #node({l: #node({l: #leaf, r: #leaf, v: 1}), r: #node({l: #leaf, r: #leaf, v: 3}), v: 2})
+Functions over a recursive type are polymorphic in its parameters.
+${+ {size t} {size {node leaf "x" leaf}}}
+expect: 4
+The constructor applies the type to Type arguments, so it can be ascribed and compared.
+${Tree Int}
+expect: Tree(Int)
+${= {: t {Tree Int}} t}
+expect: true
+Identity is structural: another declaration with the same body is the same type.
+$[Type {Bin b} rollBin unrollBin
+  {Variant {' {Field "leaf" Unit}
+              {Field "node" {Struct {' {Field "l" Bin} {Field "v" b} {Field "r" Bin}}}}}}]
+${= {Tree Int} {Bin Int}}
+expect: true
+${sum {: {rollBin {#leaf unit}} {Tree Int}}}
+expect: 0
+A type with no parameters is a Type itself.
+$[Type Nat rollNat unrollNat {Option Nat}]
+$[# {nat n} {!if {= n 0} {rollNat none} {rollNat {some {nat {- n 1}}}}}]
+$[# {natInt m} {caseOption {unrollNat m} {^ {} 0} {^ {p} {+ 1 {natInt p}}}}]
+${natInt {nat 7}}
+expect: 7
+$Nat
+expect: Nat
+Recursive types nest, through their arguments and through each other.
+$[Type {Rose a} rollRose unrollRose {Struct {' {Field "label" a} {Field "kids" {List Rose}}}}]
+$[# {rose v ks} {rollRose {. label v kids ks}}]
+$[# {roseSum r} [# x {unrollRose r}] {+ {.label x} {fold {.kids x} 0 {^ {acc k} {+ acc {roseSum k}}}}}]
+${roseSum {rose 1 {' {rose 2 {'}} {rose 3 {' {rose 4 {'}}}}}}}
+expect: 10
+${Tree {Rose String}}
+expect: Tree(Rose(String))
+A recursive type may hold functions: here a lazy stream.
+$[Type {Stream a} rollStream unrollStream {Struct {' {Field "head" a} {Field "tail" {Fn {'} Stream}}}}]
+$[# {from n} {rollStream {. head n tail {^ {} {from {+ n 1}}}}}]
+$[# {takeS s n} {!if {= n 0} {'} {cons {.head {unrollStream s}} {takeS {{.tail {unrollStream s}}} {- n 1}}}}]
+${takeS {from 5} 3}
+expect: [5, 6, 7]
+A type declared in a function body is local to it.
+$[# {countdown n} [Type C rollC unrollC {Option C}] [# {count c} {caseOption {unrollC c} {^ {} 0} {^ {p} {+ 1 {count p}}}}] {count {rollC {some {rollC none}}}}]
+${countdown 0}
+expect: 1

@@ -26,6 +26,73 @@ pub enum TypeDesc {
     /// Alternatives sorted by label; labels unique and nonempty. The empty variant is `Never`.
     Variant(Vec<(Rc<str>, TypeDesc)>),
     Opaque(Rc<str>),
+    /// A declared recursive type applied to its arguments (`[Type ...]`, spec §4.4).
+    Mu(Rc<MuDef>, Vec<TypeDesc>),
+    /// Inside a recursive type's body only: 0 is the type itself, `i` its `i`-th parameter.
+    Bound(u32),
+    /// A parameter (or the recursive name) of a `[Type ...]` declaration while its body is evaluated: a unique
+    /// id and the name. It never outlives the declaration.
+    Param(u64, Rc<str>),
+}
+
+/// The definition of an iso-recursive type `μt. body`, declared by `[Type {name params...} roll unroll body]`.
+///
+/// Its identity is structural: two definitions are the same type exactly when they have the same number of
+/// parameters and the same body. The name and the parameter names only serve display. The body refers to the
+/// type itself only as `Bound(0)`, with the same arguments, so every recursive type is regular.
+#[derive(Debug)]
+pub struct MuDef {
+    pub name: Rc<str>,
+    pub params: Vec<Rc<str>>,
+    pub body: TypeDesc,
+    /// Function types in the body, counting those inside the bodies of the recursive types it uses: an applied
+    /// recursive type carries one effect variable per slot (see `Ty::Mu`).
+    pub effs: usize,
+    /// `None` when values of the type never support equality; otherwise which parameters must support it.
+    pub eq: Option<Vec<bool>>,
+}
+
+impl MuDef {
+    pub fn new(name: Rc<str>, params: Vec<Rc<str>>, body: TypeDesc) -> MuDef {
+        let effs = body.eff_slots();
+        let eq = body.eq_needs().map(|need| (1..=params.len() as u32).map(|i| need.contains(&i)).collect());
+        MuDef { name, params, body, effs, eq }
+    }
+
+    /// The body with the type itself and its parameters replaced by `args`: one unfolding.
+    pub fn unfold(self: &Rc<MuDef>, args: &[TypeDesc]) -> TypeDesc {
+        let me = TypeDesc::Mu(self.clone(), args.to_vec());
+        self.body.subst_bound(&|i| if i == 0 { me.clone() } else { args[i as usize - 1].clone() })
+    }
+
+    /// The body, written with the declared names (for messages).
+    pub fn body_text(&self) -> String {
+        let name = |i: u32| if i == 0 { self.name.clone() } else { self.params[i as usize - 1].clone() };
+        self.body.subst_bound(&|i| TypeDesc::Param(0, name(i))).to_string()
+    }
+}
+
+impl PartialEq for MuDef {
+    fn eq(&self, other: &MuDef) -> bool {
+        self.params.len() == other.params.len() && self.body == other.body
+    }
+}
+impl Eq for MuDef {}
+impl PartialOrd for MuDef {
+    fn partial_cmp(&self, other: &MuDef) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+impl Ord for MuDef {
+    fn cmp(&self, other: &MuDef) -> std::cmp::Ordering {
+        (self.params.len(), &self.body).cmp(&(other.params.len(), &other.body))
+    }
+}
+impl std::hash::Hash for MuDef {
+    fn hash<H: std::hash::Hasher>(&self, h: &mut H) {
+        self.params.len().hash(h);
+        self.body.hash(h);
+    }
 }
 
 /// The deepest type a binding, region, or `Type` value may have. Types are trees that the checker, the VM, and
@@ -53,6 +120,7 @@ impl TypeDesc {
                     work.push((r, d + 1));
                 }
                 TypeDesc::Record(fs) | TypeDesc::Variant(fs) => work.extend(fs.iter().map(|(_, t)| (t, d + 1))),
+                TypeDesc::Mu(_, args) => work.extend(args.iter().map(|t| (t, d + 1))),
                 _ => {}
             }
         }
@@ -65,7 +133,108 @@ impl TypeDesc {
             TypeDesc::Func(..) | TypeDesc::Opaque(_) => false,
             TypeDesc::List(t) => t.comparable(),
             TypeDesc::Record(fs) | TypeDesc::Variant(fs) => fs.iter().all(|(_, t)| t.comparable()),
+            TypeDesc::Mu(def, args) => def.eq.as_ref().is_some_and(|need| need.iter().zip(args).all(|(n, a)| !n || a.comparable())),
             _ => true,
+        }
+    }
+
+    /// The parts directly inside this type, not looking into the bodies of recursive types.
+    fn children(&self) -> Vec<&TypeDesc> {
+        match self {
+            TypeDesc::List(e) => vec![e],
+            TypeDesc::Func(ps, r) => ps.iter().chain(std::iter::once(&**r)).collect(),
+            TypeDesc::Record(fs) | TypeDesc::Variant(fs) => fs.iter().map(|f| &f.1).collect(),
+            TypeDesc::Mu(_, args) => args.iter().collect(),
+            _ => vec![],
+        }
+    }
+
+    /// Whether a declaration's placeholder (`Param`) occurs in the type.
+    pub fn has_param(&self) -> bool {
+        matches!(self, TypeDesc::Param(..)) || self.children().iter().any(|t| t.has_param())
+    }
+
+    /// Whether a recursive type occurs in the type.
+    pub fn has_mu(&self) -> bool {
+        matches!(self, TypeDesc::Mu(..)) || self.children().iter().any(|t| t.has_mu())
+    }
+
+    /// The first placeholder (`Param`) in the type.
+    pub fn first_param(&self) -> Option<(u64, Rc<str>)> {
+        match self {
+            TypeDesc::Param(id, n) => Some((*id, n.clone())),
+            _ => self.children().into_iter().find_map(|t| t.first_param()),
+        }
+    }
+
+    /// Rebuild the type bottom-up, replacing the leaves `f` maps (it is not applied inside recursive types'
+    /// bodies, which are closed).
+    fn map_leaves(&self, f: &dyn Fn(&TypeDesc) -> Option<TypeDesc>) -> TypeDesc {
+        if let Some(t) = f(self) {
+            return t;
+        }
+        let labeled = |fs: &[(Rc<str>, TypeDesc)]| fs.iter().map(|(n, t)| (n.clone(), t.map_leaves(f))).collect();
+        match self {
+            TypeDesc::List(e) => TypeDesc::List(Rc::new(e.map_leaves(f))),
+            TypeDesc::Func(ps, r) => TypeDesc::Func(ps.iter().map(|p| p.map_leaves(f)).collect(), Rc::new(r.map_leaves(f))),
+            TypeDesc::Record(fs) => TypeDesc::Record(labeled(fs)),
+            TypeDesc::Variant(fs) => TypeDesc::Variant(labeled(fs)),
+            TypeDesc::Mu(def, args) => TypeDesc::Mu(def.clone(), args.iter().map(|a| a.map_leaves(f)).collect()),
+            other => other.clone(),
+        }
+    }
+
+    /// Replace each `Bound(i)` by `f(i)`.
+    pub fn subst_bound(&self, f: &dyn Fn(u32) -> TypeDesc) -> TypeDesc {
+        self.map_leaves(&|t| match t {
+            TypeDesc::Bound(i) => Some(f(*i)),
+            _ => None,
+        })
+    }
+
+    /// Replace each placeholder `Param(id)` by `f(id)` when it gives one.
+    pub fn subst_param(&self, f: &dyn Fn(u64) -> Option<TypeDesc>) -> TypeDesc {
+        self.map_leaves(&|t| match t {
+            TypeDesc::Param(id, _) => f(*id),
+            _ => None,
+        })
+    }
+
+    /// The number of effect variables an inference type for this descriptor carries inside recursive types and
+    /// function types (see `MuDef::effs`); the type itself (`Bound(0)`) reuses its own.
+    pub fn eff_slots(&self) -> usize {
+        let own = match self {
+            TypeDesc::Func(..) => 1,
+            TypeDesc::Mu(def, _) => def.effs,
+            _ => 0,
+        };
+        own + self.children().iter().map(|t| t.eff_slots()).sum::<usize>()
+    }
+
+    /// For a recursive type's body: `None` if its values never support equality, or else the `Bound` indices
+    /// whose types must support it (equality is assumed of the type itself).
+    fn eq_needs(&self) -> Option<Vec<u32>> {
+        match self {
+            TypeDesc::Func(..) | TypeDesc::Opaque(_) => None,
+            TypeDesc::Bound(0) => Some(vec![]),
+            TypeDesc::Bound(i) => Some(vec![*i]),
+            TypeDesc::Mu(def, args) => {
+                let need = def.eq.as_ref()?;
+                let mut out = Vec::new();
+                for (n, a) in need.iter().zip(args) {
+                    if *n {
+                        out.extend(a.eq_needs()?);
+                    }
+                }
+                Some(out)
+            }
+            _ => {
+                let mut out = Vec::new();
+                for c in self.children() {
+                    out.extend(c.eq_needs()?);
+                }
+                Some(out)
+            }
         }
     }
 }
@@ -106,8 +275,26 @@ impl fmt::Display for TypeDesc {
             TypeDesc::Variant(fs) if fs.is_empty() => write!(f, "Never"),
             TypeDesc::Variant(fs) => write_labeled(f, "<", ">", fs),
             TypeDesc::Opaque(id) => write!(f, "Native({:?})", id),
+            TypeDesc::Mu(def, args) => write_applied(f, &def.name, args),
+            TypeDesc::Bound(i) => write!(f, "<bound {}>", i),
+            TypeDesc::Param(_, n) => write!(f, "{}", n),
         }
     }
+}
+
+fn write_applied(f: &mut fmt::Formatter<'_>, name: &str, args: &[impl fmt::Display]) -> fmt::Result {
+    write!(f, "{}", name)?;
+    if !args.is_empty() {
+        write!(f, "(")?;
+        for (i, a) in args.iter().enumerate() {
+            if i > 0 {
+                write!(f, ", ")?;
+            }
+            write!(f, "{}", a)?;
+        }
+        write!(f, ")")?;
+    }
+    Ok(())
 }
 
 /// Validate and sort labeled members (record fields or variant alternatives).
@@ -170,6 +357,9 @@ pub enum Ty {
     /// Alternatives sorted by label.
     Variant(Vec<(Rc<str>, Ty)>),
     Opaque(Rc<str>),
+    /// A declared recursive type, its arguments, and one effect variable per function type its body contains
+    /// (`MuDef::effs`), so the capabilities of functions stored in a recursive value survive rolling it.
+    Mu(Rc<MuDef>, Vec<Ty>, Vec<u32>),
 }
 
 pub const INT: Ty = Ty::Prim(Prim::Int);
@@ -344,6 +534,7 @@ impl TypeCtx {
                     work.push((&f.ret, d + 1));
                 }
                 Ty::Record(fs) | Ty::Variant(fs) => work.extend(fs.iter().map(|(_, t)| (t, d + 1))),
+                Ty::Mu(_, args, _) => work.extend(args.iter().map(|t| (t, d + 1))),
                 Ty::Prim(_) | Ty::Opaque(_) => {}
             }
         }
@@ -361,8 +552,23 @@ impl TypeCtx {
         t
     }
 
-    /// Convert a ground descriptor to an inference type (function types get fresh effect variables).
+    /// Convert a ground descriptor to an inference type (function types and recursive types get fresh effect
+    /// variables). The descriptor must not contain placeholders (`Param`) or stray `Bound`s.
     pub fn from_desc(&mut self, d: &TypeDesc, level: u32) -> Ty {
+        let effs: Vec<u32> = (0..d.eff_slots()).map(|_| self.fresh_eff(level, 0)).collect();
+        let mut next = 0;
+        Self::from_desc_with(d, &[], &effs, &mut next)
+    }
+
+    /// Convert a descriptor, replacing `Bound(i)` by `subst[i]` and taking effect variables from `effs` in a
+    /// fixed traversal order (each function type takes one before its parts; each recursive type takes its
+    /// definition's before its arguments).
+    fn from_desc_with(d: &TypeDesc, subst: &[Ty], effs: &[u32], next: &mut usize) -> Ty {
+        let take = |n: usize, next: &mut usize| {
+            let out = effs[*next..*next + n].to_vec();
+            *next += n;
+            out
+        };
         match d {
             TypeDesc::Unit => UNIT,
             TypeDesc::Bool => BOOL,
@@ -371,17 +577,42 @@ impl TypeCtx {
             TypeDesc::String => STRING,
             TypeDesc::Type => TYPE,
             TypeDesc::Data => DATA,
-            TypeDesc::List(t) => list(self.from_desc(t, level)),
+            TypeDesc::List(t) => list(Self::from_desc_with(t, subst, effs, next)),
             TypeDesc::Func(args, r) => {
-                let params = args.iter().map(|a| self.from_desc(a, level)).collect();
-                let ret = self.from_desc(r, level);
-                let eff = self.fresh_eff(level, 0);
+                let eff = take(1, next)[0];
+                let params = args.iter().map(|a| Self::from_desc_with(a, subst, effs, next)).collect();
+                let ret = Self::from_desc_with(r, subst, effs, next);
                 Ty::Fn(Box::new(FnTy { params, ret, eff }))
             }
-            TypeDesc::Record(fs) => Ty::Record(fs.iter().map(|(n, t)| (n.clone(), self.from_desc(t, level))).collect()),
-            TypeDesc::Variant(fs) => Ty::Variant(fs.iter().map(|(n, t)| (n.clone(), self.from_desc(t, level))).collect()),
+            TypeDesc::Record(fs) => Ty::Record(fs.iter().map(|(n, t)| (n.clone(), Self::from_desc_with(t, subst, effs, next))).collect()),
+            TypeDesc::Variant(fs) => Ty::Variant(fs.iter().map(|(n, t)| (n.clone(), Self::from_desc_with(t, subst, effs, next))).collect()),
             TypeDesc::Opaque(id) => Ty::Opaque(id.clone()),
+            TypeDesc::Mu(def, args) => {
+                let own = take(def.effs, next);
+                Ty::Mu(def.clone(), args.iter().map(|a| Self::from_desc_with(a, subst, effs, next)).collect(), own)
+            }
+            TypeDesc::Bound(i) => subst.get(*i as usize).cloned().expect("a Bound index within its recursive type"),
+            TypeDesc::Param(..) => unreachable!("type placeholders are rejected before conversion"),
         }
+    }
+
+    /// One unfolding of a recursive type: its body, with the type itself and its parameters substituted.
+    pub fn unfold(&self, def: &Rc<MuDef>, args: &[Ty], effs: &[u32]) -> Ty {
+        let mut subst = vec![Ty::Mu(def.clone(), args.to_vec(), effs.to_vec())];
+        subst.extend(args.iter().cloned());
+        let mut next = 0;
+        let t = Self::from_desc_with(&def.body, &subst, effs, &mut next);
+        debug_assert_eq!(next, def.effs);
+        t
+    }
+
+    /// The generic types of a recursive type's roll and unroll functions: `(unfolded, folded)`, with variables
+    /// at `GENERIC_LEVEL`.
+    pub fn mu_generic(&mut self, def: &Rc<MuDef>) -> (Ty, Ty) {
+        let args: Vec<Ty> = def.params.iter().map(|_| self.fresh(GENERIC_LEVEL)).collect();
+        let effs: Vec<u32> = (0..def.effs).map(|_| self.fresh_eff(GENERIC_LEVEL, 0)).collect();
+        let unfolded = self.unfold(def, &args, &effs);
+        (unfolded, Ty::Mu(def.clone(), args, effs))
     }
 
     /// Convert to a ground descriptor (ignoring effects). Fails if variables remain.
@@ -402,6 +633,7 @@ impl TypeCtx {
             Ty::Record(fs) => TypeDesc::Record(fs.iter().map(|(n, t)| Some((n.clone(), self.to_desc(t)?))).collect::<Option<_>>()?),
             Ty::Variant(fs) => TypeDesc::Variant(fs.iter().map(|(n, t)| Some((n.clone(), self.to_desc(t)?))).collect::<Option<_>>()?),
             Ty::Opaque(id) => TypeDesc::Opaque(id),
+            Ty::Mu(def, args, _) => TypeDesc::Mu(def, args.iter().map(|t| self.to_desc(t)).collect::<Option<_>>()?),
         })
     }
 
@@ -470,6 +702,11 @@ impl TypeCtx {
             Ty::Record(fs) => Ty::Record(fs.iter().map(|(n, t)| (n.clone(), self.inst(t, gen, level, m))).collect()),
             Ty::Variant(fs) => Ty::Variant(fs.iter().map(|(n, t)| (n.clone(), self.inst(t, gen, level, m))).collect()),
             Ty::Opaque(id) => Ty::Opaque(id),
+            Ty::Mu(def, args, effs) => {
+                let args = args.iter().map(|t| self.inst(t, gen, level, m)).collect();
+                let effs = effs.iter().map(|e| self.inst_eff(*e, gen, level, m)).collect();
+                Ty::Mu(def, args, effs)
+            }
         }
     }
 
@@ -523,13 +760,28 @@ impl TypeCtx {
                 Ok(())
             }
             (Ty::Opaque(x), Ty::Opaque(y)) if x == y => Ok(()),
+            // Iso-recursive: two recursive types are equal when their definitions are; a recursive type never
+            // equals its unfolding.
+            (Ty::Mu(d1, a1, e1), Ty::Mu(d2, a2, e2)) if Rc::ptr_eq(d1, d2) || d1 == d2 => {
+                for (x, y) in a1.iter().zip(a2) {
+                    self.unify(x, y)?;
+                }
+                for (x, y) in e1.iter().zip(e2) {
+                    self.eff_merge(*x, *y);
+                }
+                Ok(())
+            }
             _ => Err(self.mismatch(&a, &b)),
         }
     }
 
     fn mismatch(&self, a: &Ty, b: &Ty) -> String {
         let names = &mut Names::default();
-        format!("type mismatch: `{}` versus `{}`", self.show_with(a, names), self.show_with(b, names))
+        let mut m = format!("type mismatch: `{}` versus `{}`", self.show_with(a, names), self.show_with(b, names));
+        if matches!(a, Ty::Mu(..)) != matches!(b, Ty::Mu(..)) {
+            m.push_str(MU_HINT);
+        }
+        m
     }
 
     fn bind(&mut self, v: u32, t: &Ty) -> TResult<()> {
@@ -577,6 +829,12 @@ impl TypeCtx {
                 f.params.iter().any(|p| self.occurs_adjust(v, p, level, seen)) || self.occurs_adjust(v, &f.ret, level, seen)
             }
             Ty::Record(fs) | Ty::Variant(fs) => fs.iter().any(|(_, t)| self.occurs_adjust(v, t, level, seen)),
+            Ty::Mu(_, args, effs) => {
+                for e in &effs {
+                    self.adjust_eff(*e, level);
+                }
+                args.iter().any(|t| self.occurs_adjust(v, t, level, seen))
+            }
         }
     }
 
@@ -669,7 +927,7 @@ impl TypeCtx {
                     }
                     None => return Err(format!("record type `{}` has no field `{}`", self.show(&t), name)),
                 },
-                _ => return Err(format!("`{}` is not a record type, so it has no field `{}`", self.show(&t), name)),
+                _ => return Err(format!("`{}` is not a record type, so it has no field `{}`{}", self.show(&t), name, mu_hint(&t))),
             }
         }
         for (name, aty) in c.alts {
@@ -681,7 +939,7 @@ impl TypeCtx {
                     }
                     None => return Err(format!("variant type `{}` has no alternative `#{}`", self.show(&t), name)),
                 },
-                _ => return Err(format!("`{}` is not a variant type, so it has no alternative `#{}`", self.show(&t), name)),
+                _ => return Err(format!("`{}` is not a variant type, so it has no alternative `#{}`{}", self.show(&t), name, mu_hint(&t))),
             }
         }
         for case in c.cases {
@@ -694,7 +952,7 @@ impl TypeCtx {
                     );
                     self.unify(&case.other, &handlers).map_err(|m| format!("the handlers do not cover exactly the alternatives of `{}`: {}", self.show(&t), m))?;
                 }
-                _ => return Err(format!("`{}` is not a variant type and cannot be matched", self.show(&t))),
+                _ => return Err(format!("`{}` is not a variant type and cannot be matched{}", self.show(&t), mu_hint(&t))),
             }
         }
         for case in c.handles {
@@ -721,6 +979,11 @@ impl TypeCtx {
             Ty::Prim(_) => Ok(()),
             Ty::List(x) => self.require_eq(&x),
             Ty::Record(fs) | Ty::Variant(fs) => fs.iter().try_for_each(|(_, t)| self.require_eq(t)),
+            // Equality holds of a recursive type when it holds of its body, assuming it of the type itself.
+            Ty::Mu(def, args, _) => match &def.eq {
+                Some(need) => need.iter().zip(&args).filter(|(n, _)| **n).try_for_each(|(_, a)| self.require_eq(a)),
+                None => Err(format!("`{}` does not support equality (its definition contains functions or native values)", self.show(&Ty::Mu(def.clone(), args.clone(), vec![])))),
+            },
             other => Err(format!("`{}` does not support equality", self.show(&other))),
         }
     }
@@ -759,6 +1022,7 @@ impl TypeCtx {
                 self.default_rec(&f.ret, seen);
             }
             Ty::Record(fs) | Ty::Variant(fs) => fs.iter().for_each(|(_, t)| self.default_rec(t, seen)),
+            Ty::Mu(_, args, _) => args.iter().for_each(|t| self.default_rec(t, seen)),
         }
     }
 
@@ -816,7 +1080,24 @@ impl TypeCtx {
             Ty::Variant(fs) if fs.is_empty() => "Never".into(),
             Ty::Variant(fs) => format!("<{}>", fs.iter().map(|(n, t)| format!("{}: {}", n, self.show_with(t, names))).collect::<Vec<_>>().join(", ")),
             Ty::Opaque(id) => format!("Native({:?})", id),
+            Ty::Mu(def, args, _) => {
+                if args.is_empty() {
+                    def.name.to_string()
+                } else {
+                    format!("{}({})", def.name, args.iter().map(|t| self.show_with(t, names)).collect::<Vec<_>>().join(", "))
+                }
+            }
         }
+    }
+}
+
+const MU_HINT: &str = " (a recursive type is converted to and from its structure only by the roll and unroll functions of its [Type] declaration)";
+
+fn mu_hint(t: &Ty) -> &'static str {
+    if matches!(t, Ty::Mu(..)) {
+        MU_HINT
+    } else {
+        ""
     }
 }
 
@@ -892,5 +1173,60 @@ mod tests {
         t.unify(&h, &Ty::Record(vec![(Rc::from("a"), handler)])).unwrap();
         assert_eq!(t.to_desc(&v), Some(TypeDesc::Variant(vec![(Rc::from("a"), TypeDesc::String)])));
         assert!(matches!(t.resolve(&ret), Ty::Prim(Prim::Int)));
+    }
+
+    /// `μt. <nil: Unit, cons: {head: a, tail: t}>`, named `name`.
+    fn list_def(name: &str) -> Rc<MuDef> {
+        let cell = TypeDesc::Record(vec![(Rc::from("head"), TypeDesc::Bound(1)), (Rc::from("tail"), TypeDesc::Bound(0))]);
+        let body = TypeDesc::Variant(vec![(Rc::from("cons"), cell), (Rc::from("nil"), TypeDesc::Unit)]);
+        Rc::new(MuDef::new(Rc::from(name), vec![Rc::from("a")], body))
+    }
+
+    #[test]
+    fn recursive_types_are_structural_and_iso() {
+        let (l, m) = (list_def("L"), list_def("M"));
+        assert_eq!(*l, *m, "the name does not take part in identity");
+        let mut t = TypeCtx::default();
+        let a = TypeDesc::Mu(l.clone(), vec![TypeDesc::Int]);
+        let b = TypeDesc::Mu(m.clone(), vec![TypeDesc::Int]);
+        let (ta, tb) = (t.from_desc(&a, 1), t.from_desc(&b, 1));
+        t.unify(&ta, &tb).unwrap();
+        assert_eq!(a.to_string(), "L(Int)");
+        // A recursive type never unifies with its unfolding.
+        let unfolded = t.from_desc(&l.unfold(&[TypeDesc::Int]), 1);
+        assert!(t.unify(&ta, &unfolded).unwrap_err().contains("roll and unroll"));
+        // Arguments unify.
+        let v = t.fresh(1);
+        t.unify(&Ty::Mu(l.clone(), vec![v.clone()], vec![]), &ta).unwrap();
+        assert!(matches!(t.resolve(&v), Ty::Prim(Prim::Int)));
+        assert_eq!(l.body_text(), "<cons: {head: a, tail: L}, nil: Unit>");
+    }
+
+    #[test]
+    fn recursive_type_equality_and_effect_slots() {
+        let l = list_def("L");
+        assert_eq!(l.eq, Some(vec![true]), "a list's equality needs its element's");
+        assert_eq!(l.effs, 0);
+        let stream = TypeDesc::Record(vec![
+            (Rc::from("head"), TypeDesc::Bound(1)),
+            (Rc::from("tail"), TypeDesc::Func(vec![], Rc::new(TypeDesc::Bound(0)))),
+        ]);
+        let s = Rc::new(MuDef::new(Rc::from("S"), vec![Rc::from("a")], stream));
+        assert_eq!(s.eq, None);
+        assert_eq!(s.effs, 1);
+        // A list of streams carries the stream's effect slot.
+        assert_eq!(TypeDesc::Mu(l.clone(), vec![TypeDesc::Mu(s.clone(), vec![TypeDesc::Int])]).eff_slots(), 1);
+        let mut t = TypeCtx::default();
+        let x = t.from_desc(&TypeDesc::Mu(l.clone(), vec![TypeDesc::Int]), 1);
+        assert!(t.require_eq(&x).is_ok());
+        let y = t.from_desc(&TypeDesc::Mu(l, vec![TypeDesc::Func(vec![], Rc::new(TypeDesc::Int))]), 1);
+        assert!(t.require_eq(&y).is_err());
+        // Unfolding a stream shares its effect variable with the stream inside it.
+        let (unfolded, folded) = t.mu_generic(&s);
+        let (Ty::Record(fs), Ty::Mu(_, _, effs)) = (&unfolded, &folded) else { panic!() };
+        let Ty::Fn(f) = &fs[1].1 else { panic!() };
+        assert_eq!(t.eff_root(f.eff), t.eff_root(effs[0]));
+        let Ty::Mu(_, _, inner) = &f.ret else { panic!() };
+        assert_eq!(inner, effs);
     }
 }

@@ -35,6 +35,13 @@ often give the fix.
 | `${f"{hi}"}`, or `f"{I am ${age}}"` | ``type error: a value of type String is not callable`` | `${...}` holds a form, and `{x}` calls `x`: write `$f"{hi}"` in prose and `$age` in a hole |
 | `f"{text` (no closing `}"`) | ``syntax error: unterminated template: its text ends at the first `}"` outside a `$` hole`` | Close it with `}"`; a literal `}"` in the text is a hole, `${str "}\""}` |
 | `{1.+ 2}` | ``syntax error: a method name after `.` must be a word identifier`` | `{+ 1 2}` |
+| `{!case t ...}` where `t : Tree(a)` | ``type error: `Tree(a)` is not a variant type and cannot be matched (a recursive type is converted to and from its structure only by the roll and unroll functions of its [Type] declaration)`` | Unroll first: `{!case {unrollTree t} ...}`; the same applies to `{.l t}` |
+| `{f {#leaf unit}}` where `f` takes a `Tree(a)` | ``type error: argument 1: `Tree(a)` is not a variant type, so it has no alternative `#leaf` `` (or a `type mismatch` naming both, plus the same roll/unroll hint) | Roll it: `{f {rollTree {#leaf unit}}}` |
+| `{Tree {List a}}` inside `Tree`'s own body | ``type error: a value of type Type is not callable`` | Inside its body the name is the recursive occurrence, a Type; recursive types are regular |
+| `{: x a}` with `a` a `[Type]` parameter | ``type error: `a` is a parameter of a [Type] declaration; it can only be used to build that type's body`` | Use parameters only to build the body's Type |
+| `[Type T roll roll ...]` | ``name error: type `T` needs distinct names for itself and its roll and unroll functions`` | Three distinct names |
+| `{= t t}` where the type holds functions | ``type error: argument 1: `S` does not support equality (its definition contains functions or native values)`` | Compare a projection that has equality |
+| `[# leaf {rollTree {#leaf unit}}] [% leaf]` | ``stage error: a static expression cannot use the runtime binding `leaf` `` | Rolling is a call: `[# leaf [% {rollTree {#leaf unit}}]]` |
 | `{. a}` | `syntax error: a record literal ... needs a value after every label` | `{. a 1}` |
 | `{head {'}}` | `runtime error: head of an empty list` | Use `caseList` or check `isEmpty` |
 | An infinite loop | `limit error: instruction budget (50000000) exhausted` | Fix the termination; budgets are `Limits` in the host API |

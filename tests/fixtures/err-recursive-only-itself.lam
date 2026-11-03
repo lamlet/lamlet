@@ -1,0 +1,4 @@
+$[Import* std]
+A type whose body is just itself has no structure.
+$[Type Loop rollLoop unrollLoop Loop]
+expect-error: type: the body of type `Loop` cannot be just `Loop` itself

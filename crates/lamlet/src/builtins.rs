@@ -250,6 +250,15 @@ pub fn label_scheme(t: &mut TypeCtx, l: &crate::value::LabelFn) -> Ty {
             Ty::Fn(Box::new(FnTy { params, ret: Ty::Record(fields), eff }))
         }
         LabelFn::List(n) => Ty::Fn(Box::new(FnTy { params: vec![a.clone(); *n], ret: list(a), eff })),
+        LabelFn::Roll(def) => {
+            let (unfolded, folded) = t.mu_generic(def);
+            Ty::Fn(Box::new(FnTy { params: vec![unfolded], ret: folded, eff }))
+        }
+        LabelFn::Unroll(def) => {
+            let (unfolded, folded) = t.mu_generic(def);
+            Ty::Fn(Box::new(FnTy { params: vec![folded], ret: unfolded, eff }))
+        }
+        LabelFn::TypeApply(def) => Ty::Fn(Box::new(FnTy { params: vec![TYPE; def.params.len()], ret: TYPE, eff })),
     }
 }
 
@@ -272,6 +281,8 @@ pub fn call_label(l: &crate::value::LabelFn, args: &[Value]) -> Result<Value, St
         LabelFn::Tag(n) => Ok(Value::Variant(Rc::new((n.clone(), args[0].clone())))),
         LabelFn::Record(ls) => Ok(Value::record(ls.iter().cloned().zip(args.iter().cloned()).collect())),
         LabelFn::List(_) => Ok(Value::List(List::from_vec(args.to_vec()))),
+        LabelFn::Roll(_) | LabelFn::Unroll(_) => Ok(args[0].clone()),
+        LabelFn::TypeApply(def) => composite_type(TypeDesc::Mu(def.clone(), args.iter().map(type_of).collect::<Result<_, _>>()?)),
     }
 }
 

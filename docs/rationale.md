@@ -111,13 +111,15 @@ output, and laziness is always visible as a lambda.
 **Decision.** A binding is static by a syntactic rule (spec §5), never because an optimizer could fold it. Type
 values may be computed at any stage, because building a Type has no effect. Only the checker's *reading* of a
 Type requires a static constant. The checker evaluates code to find one only at an explicit stage boundary:
-`[% e]`, the type operand of an ascription `{: e T}`, or a native's signature `[Native f T …]`. Those operands
+`[% e]`, the type operand of an ascription `{: e T}`, a native's signature `[Native f T …]`, or the body of a
+recursive type `[Type T roll unroll e]` (D15). Those operands
 can only ever be static Types, so they are stage boundaries by their position, and `{: xs {List Int}}` and
 `[Native f {Fn {' Int} Int} …]` need no `[% ...]`. The rule is still syntactic: `T`
 may use only static bindings, exactly as inside `[% ...]`.
 
 **Supported fragment.** Computed types are ground, first-order descriptors: no type variables (`{List a}` cannot
-be written) and no recursive types. This keeps the checker free of dependent typing.
+be written). A descriptor may name a declared recursive type (D15), but it is never cyclic. This keeps the
+checker free of dependent typing.
 
 **Alternative considered.** *A separate type-expression sublanguage.* It would duplicate the expression language,
 and lose computed types built by ordinary functions, which is the feature worth having.
@@ -260,10 +262,57 @@ moves the check to the host and the printing to every author.
 **Cost.** One ground type and one primitive. A `Data` value cannot be taken apart in Lamlet, deliberately: code
 that needs the value keeps it typed and erases it only where it is handed on.
 
+## D15. Iso-recursive types, declared by `[Type ...]`
+
+**Decision.** `[Type {T a...} roll unroll e]` declares `T(a...) = μT. e`. The body `e` is a static Type
+expression in which `T` and the parameters are placeholder Types. The declaration binds the constructor `T`
+and two ordinary functions, `roll : Fn([e[T/T]], T(a..))` and `unroll`, its inverse. A recursive type never
+unifies with its unfolding; only `roll` and `unroll` convert, and they are the identity at run time. Identity is
+structural: the arity and the body, not the name.
+
+**Why.**
+
+- *Iso, not equi.* Equi-recursive types make `μT. e` equal to its unfolding, so unification must compare
+  infinite trees: cyclic inference types, or coinductive unification with its own termination argument. Iso-
+  recursive types keep every inference type a finite tree, so the existing first-order unifier, the occurs check,
+  and the type size and depth limits apply unchanged. The price is explicit `roll`/`unroll`, which fits a
+  language whose staging, laziness, and recursion are already explicit.
+- *A declaration, not a primitive.* HM cannot infer which `μ` a structure folds into, so `roll` has to name its
+  type. A `K::roll` taking a Type argument would have a type that depends on a value (D1, D6). Binding `roll` and
+  `unroll` per declaration gives them ordinary schemes; the checker gains one type form and no per-function
+  rules. The user names them, so a declaration introduces no name the source does not spell, and scoping stays
+  lexical.
+- *Structural, not nominal.* D3 rejected nominal types because they need a registry. Comparing definitions keeps
+  "equal structure means an equal type" and makes declarations order-independent.
+- *The body is an ordinary Type computation.* It reuses computed types (D6): `Option`, `Pair`, `List`, and any
+  user function that builds a Type work in a body. The type's name in its body is the recursive occurrence, as a
+  recursive lambda's name is the function itself (D4). It is a Type, not a function, so every recursive type is
+  regular: no `T(List(a))` inside `T(a)`. Regular types need no polymorphic recursion and keep unification
+  syntactic.
+- *Effects are carried.* A recursive type has one capability variable per function type in its body. Without
+  them, rolling a value would forget what calling its functions requires (D10), and static code could reach a
+  Runtime native through an unrolled stream.
+
+**Alternatives considered.**
+
+- *Auto-named `T::roll`.* `::` is for modules (D11), and no declaration creates one.
+- *Roll and unroll as syntax with a Type operand* (`{roll T e}`). It would be a second ascription-like form, and
+  not first-class: `{map xs rollTree}` would be impossible.
+- *Unrolling in `match`.* Making `K::match` see through a recursive type is a type-directed rule (D7). A macro can
+  write `{!case {unroll t} ...}`.
+
+**Cost.** One type form, three descriptor forms (an applied type, a bound index for bodies, and a placeholder that
+lives only while a body is evaluated), and three label functions. List stays built in for its literal syntax and
+speed, though `μL. <nil: Unit, cons: {head: a, tail: L}>` now expresses it.
+
+**Limitations.** No mutually recursive groups; encode them with one type and a tag per sort, as D4 does for
+functions. No recursive types in native signatures in v1: a host package would need a generated `[Type ...]`
+declaration.
+
 ## Known limitations
 
-- No mutual recursion, recursive types (other than List), polymorphic computed types, abstract types, or type
-  classes.
+- No mutual recursion (of functions or of recursive types), non-regular recursive types, polymorphic computed
+  types, abstract types, or type classes.
 - No higher-rank polymorphism: a lambda parameter used at two types must be let-bound instead.
 - Checking stops at the first diagnostic.
 - No portable compiled artifacts: programs are in-memory only.

@@ -1,0 +1,5 @@
+$[Import* std]
+A recursive type is not its structure: matching one needs its unroll function first.
+$[Type {Tree a} rollTree unrollTree {Variant {' {Field "leaf" Unit} {Field "node" {Struct {' {Field "l" Tree} {Field "v" a} {Field "r" Tree}}}}}}]
+${!case {rollTree {#leaf unit}} {leaf u 0} {node n 1}}
+expect-error: type: is not a variant type and cannot be matched (a recursive type is converted

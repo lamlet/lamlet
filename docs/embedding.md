@@ -62,7 +62,7 @@ ground, `type_text` always), and a `Location` with line, column, and byte offset
 | `$[% expr]` | Yes. The expression must not need runtime input. |
 | `${f a b}` | No: it is a call, and calls run in an instance, even when they need no input |
 
-A binding is static when it is a literal, a lambda, a `[% ...]`, or built from static parts (spec §4.4). So
+A binding is static when it is a literal, a lambda, a `[% ...]`, or built from static parts (spec §5). So
 `$[# total [% {fold xs 0 +}]]` followed by `$total` is prepared; `${fold xs 0 +}` is not.
 
 ### Rendering

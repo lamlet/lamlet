@@ -1,0 +1,6 @@
+$[Import* std]
+A variant is not a recursive type: it must be rolled.
+$[Type {Tree a} rollTree unrollTree {Variant {' {Field "leaf" Unit} {Field "node" {Struct {' {Field "l" Tree} {Field "v" a} {Field "r" Tree}}}}}}]
+$[# {isLeaf t} {!case {unrollTree t} {leaf u true} {node n false}}]
+${isLeaf {#leaf unit}}
+expect-error: type: `Tree(a)` is not a variant type, so it has no alternative `#leaf`

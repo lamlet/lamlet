@@ -709,6 +709,9 @@ impl<'s> Checker<'s> {
                         return Err(derr(DiagKind::Native, format!("a Native declaration needs a function type, not {}", other), ty.span()))
                     }
                 };
+                if params.iter().chain(std::iter::once(&ret)).any(|t| t.has_mu()) {
+                    return Err(derr(DiagKind::Native, "recursive types in native arguments/results are not supported in v1", ty.span()));
+                }
                 match self.s.natives.entries.get(api_id) {
                     Some(e) => {
                         if e.params != params || e.ret != ret {
@@ -783,6 +786,7 @@ impl<'s> Checker<'s> {
                 }
                 Ok(DeclOut::Done)
             }
+            Decl::Type { name, name_span, params, roll, unroll, body, span, .. } => self.type_decl(name, *name_span, params, roll, unroll, body, *span, top),
             Decl::Macro { name, name_span, clauses, span, .. } => {
                 let def = self.s.fresh_def();
                 let origin: Rc<str> = Rc::from(format!("macro `{}` defined at {}", syntax::base_name(name), self.s.sources.location(*span)));
@@ -800,6 +804,87 @@ impl<'s> Checker<'s> {
                 Ok(DeclOut::Done)
             }
         }
+    }
+
+    /// `[Type {name params...} roll unroll body]`: an iso-recursive type (spec §4.4). The body is a static Type
+    /// expression in which `name` and the parameters are placeholder Types. Its result, with the placeholders
+    /// replaced by `Bound` indices, defines the type; `name` becomes its constructor (or the Type itself when
+    /// there are no parameters), and `roll`/`unroll` convert between the type and its structure.
+    #[allow(clippy::too_many_arguments)]
+    fn type_decl(
+        &mut self,
+        name: &str,
+        name_span: Span,
+        params: &[(String, Span)],
+        roll: &(String, Span),
+        unroll: &(String, Span),
+        body: &Expr,
+        span: Span,
+        top: bool,
+    ) -> CheckResult<DeclOut> {
+        let shown = syntax::base_name(name).to_string();
+        let mut seen: Vec<&str> = vec![name];
+        for (p, ps) in params {
+            if seen.contains(&p.as_str()) {
+                return Err(derr(DiagKind::Name, format!("`{}` is named twice in the head of type `{}`", syntax::base_name(p), shown), *ps));
+            }
+            seen.push(p);
+        }
+        if roll.0 == name || unroll.0 == name || roll.0 == unroll.0 {
+            let at = if roll.0 == name { roll.1 } else { unroll.1 };
+            return Err(derr(DiagKind::Name, format!("type `{}` needs distinct names for itself and its roll and unroll functions", shown), at));
+        }
+        // The body sees the type's own name and its parameters as placeholder Types.
+        let self_id = self.s.fresh_def();
+        let ids: Vec<u64> = params.iter().map(|_| self.s.fresh_def()).collect();
+        let mut scope = HashMap::new();
+        let placeholders = std::iter::once((name, self_id, format!("the recursive occurrence of type `{}` in its body", shown)))
+            .chain(params.iter().zip(&ids).map(|((p, _), id)| (p.as_str(), *id, format!("type parameter `{}` of `{}`", syntax::base_name(p), shown))));
+        for (n, id, origin) in placeholders {
+            let v = Value::Type(Rc::new(TypeDesc::Param(id, Rc::from(syntax::base_name(n)))));
+            let def = self.s.fresh_def();
+            scope.insert(n.to_string(), Binding::Value { def, scheme: Scheme::mono(TYPE), access: Access::Const(v), origin: Rc::from(origin) });
+        }
+        self.scopes.push(scope);
+        let r = self.static_type_with_params(body);
+        self.scopes.pop();
+        let desc = r?;
+        let closed = desc.subst_param(&|id| {
+            if id == self_id {
+                Some(TypeDesc::Bound(0))
+            } else {
+                ids.iter().position(|x| *x == id).map(|i| TypeDesc::Bound(i as u32 + 1))
+            }
+        });
+        if let Some((_, p)) = closed.first_param() {
+            return Err(derr(
+                DiagKind::Type,
+                format!("the body of type `{}` uses `{}`, a type parameter of an enclosing [Type] declaration", shown, p),
+                body.span(),
+            ));
+        }
+        if closed == TypeDesc::Bound(0) {
+            return Err(derr(DiagKind::Type, format!("the body of type `{}` cannot be just `{}` itself", shown, shown), body.span()));
+        }
+        let mu = Rc::new(MuDef::new(Rc::from(shown.as_str()), params.iter().map(|(p, _)| Rc::from(syntax::base_name(p))).collect(), closed));
+        let origin: Rc<str> = Rc::from(format!("type `{}` declared at {}", shown, self.s.sources.location(span)));
+        let ctor = if params.is_empty() {
+            (Scheme::mono(TYPE), Value::Type(Rc::new(TypeDesc::Mu(mu.clone(), vec![]))))
+        } else {
+            let f = LabelFn::TypeApply(mu.clone());
+            (Scheme { ty: builtins::label_scheme(&mut self.s.tcx, &f), level: 0 }, Value::Label(Rc::new(f)))
+        };
+        let label = |c: &mut Self, f: LabelFn| (Scheme { ty: builtins::label_scheme(&mut c.s.tcx, &f), level: 0 }, Value::Label(Rc::new(f)));
+        let rolls = label(self, LabelFn::Roll(mu.clone()));
+        let unrolls = label(self, LabelFn::Unroll(mu));
+        for ((n, ns), (scheme, v)) in [((name, name_span), ctor), ((&*roll.0, roll.1), rolls), ((&*unroll.0, unroll.1), unrolls)] {
+            let def = self.s.fresh_def();
+            self.bind(n, Binding::Value { def, scheme, access: Access::Const(v), origin: origin.clone() }, ns)?;
+            if top {
+                self.own.push(n.to_string());
+            }
+        }
+        Ok(DeclOut::Done)
     }
 
     /// If an elaborated expression's value is available without running effects (a constant, or a closure
@@ -855,6 +940,15 @@ impl<'s> Checker<'s> {
     /// A Type operand that can only be static (an ascription's type, a native's signature): evaluated at compile
     /// time, as if written `[% T]`, so it may use only static bindings.
     fn static_type(&mut self, e: &Expr) -> CheckResult<TypeDesc> {
+        let d = self.static_type_with_params(e)?;
+        if let Some((_, p)) = d.first_param() {
+            return Err(derr(DiagKind::Type, format!("`{}` is a parameter of a [Type] declaration; it can only be used to build that type's body", p), e.span()));
+        }
+        Ok(d)
+    }
+
+    /// A static Type operand that may contain the placeholders of an enclosing `[Type ...]` declaration.
+    fn static_type_with_params(&mut self, e: &Expr) -> CheckResult<TypeDesc> {
         let (t, c) = self.check_static_operand(e)?;
         self.unify_at(&t, &TYPE, e.span(), "expected a Type")?;
         match self.s.eval_static(&c, e.span())? {

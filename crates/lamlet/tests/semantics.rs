@@ -73,6 +73,11 @@ fn resolver() -> MemoryResolver {
         "$[Import* std] $[Native read [% {Fn {'} Int}] \"example.test/read\" Runtime] $[# value {read}] $[# twice {^ {} {* 2 value}}]",
         Exports::All,
     );
+    r.add(
+        "trees",
+        "$[Import* std] $[Type {Tree a} rollTree unrollTree {Variant {' {Field \"leaf\" Unit} {Field \"node\" {Struct {' {Field \"l\" Tree} {Field \"v\" a} {Field \"r\" Tree}}}}}}] $[# leaf [% {rollTree {#leaf unit}}]] $[# {node l v r} {rollTree {#node {. l l v v r r}}}]",
+        Exports::All,
+    );
     r.add("diamond-left", "$[Import live] $[# left live::value]", Exports::All);
     r.add("diamond-right", "$[Import live] $[# right live::value]", Exports::All);
     r
@@ -1044,4 +1049,48 @@ fn to_data_forgets_the_type_and_keeps_the_value() {
     fails_with(&s("${toData {^ {x} x}}"), DiagKind::Type, "does not support equality");
     fails_with(&s("${+ {toData 1} 1}"), DiagKind::Type, "Data");
     assert_eq!(one(&s("$Data")), "Data");
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// §4.6 Recursive types
+
+const TREE: &str = "$[Type {Tree a} rollTree unrollTree {Variant {' {Field \"leaf\" Unit} {Field \"node\" {Struct {' {Field \"l\" Tree} {Field \"v\" a} {Field \"r\" Tree}}}}}}]\n";
+
+#[test]
+fn recursive_types_roll_and_unroll() {
+    let src = s(&format!("{}$[# {{depth t}} {{!case {{unrollTree t}} {{leaf u 0}} {{node n {{+ 1 {{max {{depth {{.l n}}}} {{depth {{.r n}}}}}}}}}}}}] $[# l [% {{rollTree {{#leaf unit}}}}]] ${{depth {{rollTree {{#node {{. l {{rollTree {{#node {{. l l v 1 r l}}}}}} v 2 r l}}}}}}}}}}", TREE));
+    assert_eq!(one(&src), "2");
+    // Iso-recursive: a type and its structure differ in both directions.
+    fails_with(&s(&format!("{}${{!case {{rollTree {{#leaf unit}}}} {{leaf u 0}} {{node n 1}}}}", TREE)), DiagKind::Type, "cannot be matched");
+    fails_with(&s(&format!("{}$[# {{f t}} {{unrollTree t}}] ${{f {{#leaf unit}}}}", TREE)), DiagKind::Type, "roll and unroll");
+}
+
+#[test]
+fn recursive_types_are_structural() {
+    let other = "$[Type {Bin b} rollBin unrollBin {Variant {' {Field \"leaf\" Unit} {Field \"node\" {Struct {' {Field \"l\" Bin} {Field \"v\" b} {Field \"r\" Bin}}}}}}]\n";
+    let src = s(&format!("{}{}${{= {{Tree Int}} {{Bin Int}}}} ${{unrollTree {{rollBin {{#leaf unit}}}}}}", TREE, other));
+    assert_eq!(eval(&src), vec!["true", "#leaf"]);
+    let doc = check(&s(&format!("{}$unrollTree", TREE))).unwrap();
+    assert_eq!(doc.regions.last().unwrap().ty.as_deref(), Some("Fn([Tree(a)], <leaf: Unit, node: {l: Tree(a), r: Tree(a), v: a}>)"));
+}
+
+#[test]
+fn recursive_types_from_packages() {
+    let src = "$[Import* std] $[Import* trees] ${unrollTree {node leaf 1 leaf}} ${Tree String}";
+    assert_eq!(eval(src), vec!["#node({l: #leaf, r: #leaf, v: 1})", "Tree(String)"]);
+}
+
+#[test]
+fn rolling_is_a_call_for_staging() {
+    // `{rollTree ...}` is a call, so the binding is runtime even when its argument is constant (spec §5).
+    fails_with(&s(&format!("{}$[# l {{rollTree {{#leaf unit}}}}] $[% l]", TREE)), DiagKind::Stage, "runtime binding `l`");
+    assert_eq!(one(&s(&format!("{}$[# l [% {{rollTree {{#leaf unit}}}}]] $[% l]", TREE))), "#leaf");
+}
+
+#[test]
+fn recursive_types_in_native_signatures_are_rejected() {
+    let src = s(&format!("{}$[Native f {{Fn {{' {{Tree Int}}}} Int}} \"example.test/tree\" Pure]", TREE));
+    let f = check(&src).err().expect("rejected");
+    assert_eq!(f.diagnostics[0].kind, DiagKind::Native);
+    assert!(f.diagnostics[0].message.contains("recursive types"));
 }

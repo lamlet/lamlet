@@ -194,6 +194,26 @@ Options and pairs are not built in. They are ordinary definitions in std, made f
 ${withDefault {some 3} 0}  ${withDefault none 0}      ;; 3  0
 ```
 
+**Recursive types** are declared with `[Type ...]`. The head names the type and its parameters. Then come the
+names of two functions, `roll` and `unroll`, and last the type's structure, an ordinary Type expression in
+which the type's own name is the recursive occurrence:
+
+```text
+$[Type {Tree a} rollTree unrollTree
+  {Variant {' {Field "leaf" Unit}
+              {Field "node" {Struct {' {Field "l" Tree} {Field "v" a} {Field "r" Tree}}}}}}]
+$[# leaf [% {rollTree {#leaf unit}}]]
+$[# {node l v r} {rollTree {#node {. l l v v r r}}}]
+$[# {sum t} {!case {unrollTree t} {leaf u 0} {node n {+ {+ {sum {.l n}} {.v n}} {sum {.r n}}}}}]
+${sum {node {node leaf 1 leaf} 2 leaf}}   ;; 3
+${Tree Int}                               ;; Tree(Int)
+```
+
+A `Tree(Int)` is not a variant: `rollTree` makes one from its structure, and `unrollTree` gives the structure
+back, so a `match` needs the `unrollTree` first. At run time both functions are the identity. Two declarations
+with the same structure define the same type. A type with no parameters is written `[Type Nat rollNat unrollNat
+{Option Nat}]`.
+
 ## 5. Call sugar: `x.f`
 
 A dot written directly after a value is a call: `x.f` means `{f x}`. At the head of a brace, the receiver
@@ -284,8 +304,8 @@ $[# Person [% {Struct {' {Field "name" String} {Field "age" Int}}}]]
 ${: p Person}                     ;; checks p against the computed record type
 ```
 
-Other type builders are `List`, `Fn`, `Variant`, `Option`, and `Pair`. Types are ground: you cannot write
-`{List a}` with a type variable.
+Other type builders are `List`, `Fn`, `Variant`, `Option`, `Pair`, and the constructors of `[Type ...]`
+declarations (§4). Types are ground: you cannot write `{List a}` with a type variable.
 
 ## 8. Strings and templates
 
@@ -341,6 +361,7 @@ ordinary function with an ordinary type, so you can alias it, wrap it, or pass i
 | `{p.name}` | That calls a function `name` | `{.name p}` |
 | `std.map`, `K.add` | Module paths use `::` | `std::map`, `K::add` |
 | `{x .f a}` | The space makes `.f` a getter | `{x.f a}` |
+| `{!case t ...}` on a `[Type]` value | A recursive type is not its structure | `{!case {unrollT t} ...}` |
 
 ## 11. Where to go next
 

@@ -1,0 +1,8 @@
+$[Import* std]
+Rolling keeps the capabilities of the functions inside a value: a Runtime function stays Runtime after it is
+unrolled, so static code cannot call it.
+$[Type {Stream a} rollStream unrollStream {Struct {' {Field "head" a} {Field "tail" {Fn {'} Stream}}}}]
+$[# {repeat n} {rollStream {. head n tail {^ {} {repeat n}}}}]
+$[# s [% {rollStream {. head 0 tail {^ {} {repeat {time}}}}}]]
+${[% {.head {unrollStream {{.tail {unrollStream s}}}}}]}
+expect-error: stage: requires Runtime capabilities

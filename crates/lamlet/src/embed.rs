@@ -37,7 +37,7 @@ pub use crate::host::{opaque, NativeCtx, NativeEntry, NativeRegistry, TIME_INPUT
 pub use crate::package::{Exports, MemoryResolver, PackageSource, Resolver};
 pub use crate::source::{DiagKind, Diagnostic, Location};
 pub use crate::syntax::Availability;
-pub use crate::types::{TypeDesc, MAX_TYPE_DEPTH};
+pub use crate::types::{MuDef, TypeDesc, MAX_TYPE_DEPTH};
 pub use crate::value::{display, List, Value};
 pub use crate::vm::{Limits, Stats};
 pub use crate::Options;
@@ -942,6 +942,11 @@ pub enum TypeData {
     Variant(Vec<(String, TypeData)>),
     /// A registered native type, by type id.
     Opaque(String),
+    /// A recursive type declared by `[Type ...]`, applied to `args`. Its `body` refers to the type itself as
+    /// `Bound(0)` and to its `i`-th parameter as `Bound(i)`.
+    Recursive { name: String, params: Vec<String>, body: Box<TypeData>, args: Vec<TypeData> },
+    /// Inside a recursive type's body only: 0 is the type itself, `i` its `i`-th parameter.
+    Bound(u32),
 }
 
 impl Data {
@@ -1042,20 +1047,31 @@ impl TypeData {
             TypeDesc::Record(fs) => TypeData::Record(labeled(fs)),
             TypeDesc::Variant(fs) => TypeData::Variant(labeled(fs)),
             TypeDesc::Opaque(id) => TypeData::Opaque(id.to_string()),
+            TypeDesc::Mu(def, args) => TypeData::Recursive {
+                name: def.name.to_string(),
+                params: def.params.iter().map(|p| p.to_string()).collect(),
+                body: Box::new(TypeData::from_desc(&def.body)),
+                args: args.iter().map(TypeData::from_desc).collect(),
+            },
+            TypeDesc::Bound(i) => TypeData::Bound(*i),
+            // Placeholders exist only while a `[Type ...]` declaration's body is evaluated; no Type value or
+            // inferred type a host can see holds one.
+            TypeDesc::Param(_, n) => TypeData::Opaque(format!("<type parameter {}>", n)),
         }
     }
 
     /// The descriptor, normalized (labels sorted). Fails on invalid or repeated labels and on nesting deeper
     /// than `MAX_TYPE_DEPTH`.
     pub fn to_desc(&self) -> Result<TypeDesc, String> {
-        self.to_desc_at(1)
+        self.to_desc_at(1, None)
     }
 
-    fn to_desc_at(&self, depth: usize) -> Result<TypeDesc, String> {
+    /// `bound`: the number of parameters of the recursive type whose body this is in, if any.
+    fn to_desc_at(&self, depth: usize, bound: Option<usize>) -> Result<TypeDesc, String> {
         if depth > MAX_TYPE_DEPTH {
             return Err(format!("type nesting limit ({} levels) exceeded", MAX_TYPE_DEPTH));
         }
-        let sub = |t: &TypeData| t.to_desc_at(depth + 1);
+        let sub = |t: &TypeData| t.to_desc_at(depth + 1, bound);
         let labeled = |fs: &[(String, TypeData)], what: &str| -> Result<Vec<(Rc<str>, TypeDesc)>, String> {
             check_labels(fs.iter().map(|f| f.0.as_str()), what)?;
             let items = fs.iter().map(|(n, t)| Ok((Rc::from(n.as_str()), sub(t)?))).collect::<Result<Vec<_>, String>>()?;
@@ -1074,6 +1090,22 @@ impl TypeData {
             TypeData::Record(fs) => TypeDesc::Record(labeled(fs, "record field")?),
             TypeData::Variant(fs) => TypeDesc::Variant(labeled(fs, "variant alternative")?),
             TypeData::Opaque(id) => TypeDesc::Opaque(Rc::from(id.as_str())),
+            TypeData::Recursive { name, params, body, args } => {
+                let body = body.to_desc_at(1, Some(params.len()))?;
+                if body == TypeDesc::Bound(0) {
+                    return Err(format!("the recursive type {} is only itself", name));
+                }
+                let def = MuDef::new(Rc::from(name.as_str()), params.iter().map(|p| Rc::from(p.as_str())).collect(), body);
+                if args.len() != params.len() {
+                    return Err(format!("the recursive type {} takes {} argument(s), not {}", name, params.len(), args.len()));
+                }
+                TypeDesc::Mu(Rc::new(def), args.iter().map(sub).collect::<Result<_, _>>()?)
+            }
+            TypeData::Bound(i) => match bound {
+                Some(n) if (*i as usize) <= n => TypeDesc::Bound(*i),
+                Some(_) => return Err(format!("Bound({}) is out of range in its recursive type", i)),
+                None => return Err("Bound only occurs inside a recursive type's body".into()),
+            },
         })
     }
 }
@@ -1350,6 +1382,9 @@ fn type_expr(t: &TypeDesc, names: &HashMap<String, String>) -> String {
         TypeDesc::Variant(fs) if fs.is_empty() => "std::Never".into(),
         TypeDesc::Variant(fs) => labeled("std::Variant", fs),
         TypeDesc::Opaque(id) => names.get(&**id).cloned().unwrap_or_else(|| id_name(id, true)),
+        TypeDesc::Mu(..) | TypeDesc::Bound(_) | TypeDesc::Param(..) => {
+            unreachable!("native signatures cannot contain recursive types (NativeRegistry::check_marshalable)")
+        }
     }
 }
 

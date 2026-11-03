@@ -414,3 +414,21 @@ fn the_preloaded_std_follows_changes_to_the_engine() {
     let err = engine.check(SourceFile::new("b.lam", "$[Import* std]")).unwrap_err();
     assert!(err.to_string().contains("while checking package `std`"), "{}", err);
 }
+
+#[test]
+fn recursive_type_data_round_trips() {
+    use lamlet::embed::MuDef;
+    use std::rc::Rc;
+    let cell = TypeDesc::Record(vec![(Rc::from("head"), TypeDesc::Bound(1)), (Rc::from("tail"), TypeDesc::Bound(0))]);
+    let body = TypeDesc::Variant(vec![(Rc::from("cons"), cell), (Rc::from("nil"), TypeDesc::Unit)]);
+    let def = Rc::new(MuDef::new(Rc::from("L"), vec![Rc::from("a")], body));
+    let t = TypeDesc::Mu(def, vec![TypeDesc::Int]);
+    let data = TypeData::from_desc(&t);
+    assert!(matches!(&data, TypeData::Recursive { name, args, .. } if name == "L" && args.len() == 1));
+    assert_eq!(data.to_desc().unwrap(), t);
+    assert_eq!(data.to_string(), "L(Int)");
+    // `Bound` is only meaningful inside a body, and within its type's parameters.
+    assert!(TypeData::Bound(0).to_desc().is_err());
+    let bad = TypeData::Recursive { name: "B".into(), params: vec![], body: Box::new(TypeData::Bound(1)), args: vec![] };
+    assert!(bad.to_desc().is_err());
+}

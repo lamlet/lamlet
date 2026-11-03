@@ -25,8 +25,9 @@ expect: 2
 expect: 0
 expect: 3
 
-3. Trees. List is the only recursive type, so a tree is an arena: a list of nodes that name their children by
-index. A recursive function walks it by index (non-tail recursion is fine at this depth).
+3. Trees as arenas. A tree can be a recursive type (`[Type ...]`, see examples.lam). When the nodes are data
+from elsewhere, or are shared, use an arena instead: a list of nodes that name their children by index. A
+recursive function walks it by index (non-tail recursion is fine at this depth).
 $[# tree [% {' {. label "root" kids {' 1 2}} {. label "a" kids {' 3}} {. label "b" kids {'}} {. label "c" kids {'}}}]]
 $[# {count nodes i} {fold {.kids {nth nodes i}} 1 {^ {acc k} {+ acc {count nodes k}}}}]
 $[# {paths nodes i prefix} [# here f"{$prefix/${.label {nth nodes i}}}"]

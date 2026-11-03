@@ -1,0 +1,5 @@
+$[Import* std]
+The constructor takes exactly one Type per parameter.
+$[Type {T a} rollT unrollT {Option T}]
+${T Int Int}
+expect-error: type: this function expects 1 arguments, but 2 were given

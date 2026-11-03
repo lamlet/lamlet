@@ -1,0 +1,6 @@
+$[Import* std]
+Equality holds of a recursive type only when it holds of its body.
+$[Type Fs rollFs unrollFs {Struct {' {Field "f" {Fn {' Int} Int}} {Field "next" {Option Fs}}}}]
+$[# x [% {rollFs {. f {^ {n} n} next none}}]]
+${= x x}
+expect-error: type: `Fs` does not support equality

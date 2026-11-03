@@ -1,0 +1,5 @@
+$[Import* std]
+Inside its body the type name is the recursive occurrence itself, a Type, not the constructor: every recursive
+type is regular.
+$[Type {T a} rollT unrollT {Option {T {List a}}}]
+expect-error: type: a value of type Type is not callable
