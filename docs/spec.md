@@ -37,7 +37,7 @@ Recommended names (camel case for values, capitalized types, `_` in package name
 |---|---|
 | `42`, `-8`, `1.5`, `2e3` | Int / Float literal |
 | `"text"` | String (escapes `\" \\ \n \t \r \0 \u{hex}`) |
-| `f"{text}"`, `latex"{text}"` | Raw template: a template literal (§2.3) whose text is exactly as written, with no escapes |
+| `f"{text $x ${e}}"` | Template: a String built from text, exactly as written, and typed holes (§2.7) |
 | `true`, `false` | Bool |
 | `x`, `pkg::x`, `+` | Variable (lexical or qualified) |
 | `.label` | Field getter: a function value |
@@ -77,34 +77,14 @@ A bracket form's head is a keyword from a closed set. It is never a binding and 
 | `[NativeType x "id"]` | declaration | definition context | no | `x : Type` | compile | no |
 | `[Macro !m {pattern template}...]` | declaration | definition context | no | `!m` | compile | no (syntax) |
 | `[% e]` | stage boundary | expression | yes | no | static | `e`, during checking |
-| `[f "...$x..."]` | literal template | expression | String | no | context's stage | holes, left to right |
-| `[latex "...$x..."]` | literal template | expression | Latex = `{latex: String}` | no | context's stage | holes, left to right |
 
 Why these need special syntax:
 
 - **Declarations** change the scope seen by later code. A function cannot do this.
 - **`[% e]`** changes *when* `e` runs. Applying a function cannot do that.
-- **Templates** parse a literal at compile time. A function would have to parse a String at runtime, and
-  evaluated Strings never become code. Each hole is typed separately: in `[f]` it must be a Scalar, and in
-  `[latex]` it is a Latex value (inserted as source) or a Scalar (formatted, and escaped if it is a String).
-  Per-hole typing is what lets one template mix values of different types without variadic functions.
 
-Brackets are therefore exactly the places where the compiler acts on syntax, with one exception: the raw
-template literals below, which are templates written as atoms. Braces are the places where evaluation happens.
-
-**Raw templates.** `f"{text}"` is `[f "text"]`, and `latex"{text}"` is `[latex "text"]`, with these differences:
-
-- **The text ends at the first `}"` outside a hole.** Quotes, backslashes, and unbalanced braces or brackets in
-  the text are literal: `f"{He said "hi" [sic]}"`. There are no escapes, in `f` either.
-- **Holes are balanced code** (Strings, comments, and raw templates inside them are skipped whole), so a hole may
-  contain a String literal or another template: `f"{${str "x"} and ${++ f"{in$who}" "ner"}}"`. A literal `}"` is
-  written as a hole: `${str "}\""}`.
-- Holes, `$$`, typing, and the removal of a leading newline and shared indentation are the same as in `[f]` and
-  `[latex]`.
-- **The head starts a token.** `f"{` and `latex"{` open a raw template after the start of the code,
-  whitespace, or a delimiter; `f` and `latex` remain ordinary names everywhere else. Like any token, a raw
-  template must be followed by whitespace or a delimiter.
-- In a document, `$f"{...}"` and `$latex"{...}"` are regions of their own (§10).
+Brackets are therefore exactly the places where the compiler acts on syntax, with one exception: templates
+(§2.7), which are literals written as atoms. Braces are the places where evaluation happens.
 
 ### 2.4 Bodies and definition contexts
 
@@ -143,8 +123,7 @@ Scoping rules:
 | `{!and ...}`, `{!or ...}` | nested `!if` |
 | `{!case v {a x ea} ...}` (std macro) | `K::match(v, {. a λ(x).ea ...})` |
 | `{!assert a b}` | `[% {assertEqual a b}]` |
-| `[f "a $x b"]` | `K::stringAppend` chain over literal text and `K::scalarString(x)` |
-| `f"{a $x b}"`, `latex"{a $x b}"` | `[f "a $x b"]`, `[latex "a $x b"]`, with the text taken as written (§2.3) |
+| `f"{a $x b}"` | `K::stringAppend` chain over literal text and `K::scalarString(x)` (§2.7) |
 | `{: e T}` | `e`, after checking against the value of `[% T]` |
 | `r.f` | `{f r}` |
 | `{r.f a ...}` (at a brace head) | `{f r a ...}` |
@@ -168,6 +147,36 @@ hygiene, and every later stage see ordinary calls.
 - **Methods stored in fields** are ordinary fields holding functions: `{{.greet obj} obj}`. A record built from
   a prototype (`{.name= proto "Ada"}`) shares the prototype's function values. Record update copies only the
   record's field table, and values are reference counted, never deep-copied.
+
+### 2.7 Templates
+
+`f"{text}"` is a String built from literal text and typed holes.
+
+- **The text ends at the first `}"` outside a hole.** Quotes, backslashes, and unbalanced braces or brackets in
+  the text are literal: `f"{He said "hi" [sic] \o/}"`. There are no escapes.
+- **Holes** use the document convention: `$name` and `$pkg::name` read a binding, `${...}` and `$[...]` hold one
+  form, and `$$` is a literal `$`; any other `$` is text. A hole holds a *form*, so `${x}` calls `x`.
+- **Holes are balanced code**: Strings, comments, and templates inside them are skipped whole, so a hole may
+  contain a String literal or another template: `f"{${str "x"} and ${++ f"{in$who}" "ner"}}"`. A literal `}"`
+  is written as a hole: `${str "}\""}`.
+- **Each hole is typed separately**, and must be a Scalar (String, Int, Float, Bool, Unit), formatted as `str`
+  formats it. Per-hole typing is what lets one template mix values of different types without variadic
+  functions, and it is why a template is syntax: a function would have to parse a String at runtime, and
+  evaluated Strings never become code.
+- **Indentation.** A template whose text starts with a newline has that newline, the indentation its lines
+  share, and a final whitespace-only line removed.
+- **The head starts a token.** `f"{` opens a template after the start of the code, whitespace, or a delimiter;
+  `f` remains an ordinary name everywhere else. Like any token, a template must be followed by whitespace or a
+  delimiter.
+- **Expansion.** A template is expanded during checking into String concatenation (§2.5): its type is
+  `String`, and at runtime it is an ordinary String value. When every hole is a constant (a literal or a
+  static name), the checker folds the template to a constant String; a hole that calls a function is evaluated
+  at the stage of the code around it, never earlier.
+- In a document, `$f"{...}"` is a region of its own (§10).
+
+**Formulas** are not a template form. std's `Latex` is the record type `{latex: String}`; `{latex s}` makes one
+from LaTeX source, usually a template (`{latex f"{\frac{$a}{2}}"}`), `latexSource` reads it back, and
+`latexEscape` turns text into source that typesets it literally.
 
 ## 3. Core calculus
 
@@ -321,7 +330,7 @@ Every binding has a stage, S (static) or R (runtime).
 
 | A binding `[# x e]` is static (S) when `e` is | Otherwise |
 |---|---|
-| a literal, a static name, `[% e']`, a lambda whose free variables are all S, a label function, a list/record literal or `[f]`/`[latex]` template whose parts are all S, or a Native / NativeType / import | R |
+| a literal, a static name, `[% e']`, a lambda whose free variables are all S, a label function, a list/record literal or template whose parts are all S, or a Native / NativeType / import | R |
 
 This is a syntactic, predictable rule. The checker never decides to evaluate early on its own: `[# x {+ 1 2}]`
 is R, and `[# x [% {+ 1 2}]]` is S.
@@ -412,7 +421,6 @@ wrappers, and higher-order uses therefore behave identically.
 | `stringAppend` | `Fn([String,String],String)` | String representation |
 | `stringScalars` | `Fn([String],List(String))` | String representation (Unicode scalars) |
 | `scalarString` | `∀s:Scalar. Fn([s],String)` | Number formatting; dispatches on the runtime representation |
-| `latexEscape` | `Fn([String],String)` | Elaboration target of `[latex]`; the compiler may reference only `K` |
 | `debugString` | `∀a. Fn([a],String)` | Deterministic display of any value, for diagnostics |
 | `fail` | `∀a. Fn([String],a)` | Aborting is not expressible otherwise |
 | `unit` | `Unit` | The Unit value |
@@ -475,7 +483,7 @@ bindings, produces no values, and is not a scope boundary.
 | `$name`, `$pkg::name` | A lookup region: reads a binding (no call) |
 | `${...}` | An expression region |
 | `$[...]` | A bracket form: a declaration, import, `[% ]`, or template |
-| `$f"{...}"`, `$latex"{...}"` | An expression region holding one raw template (§2.3) |
+| `$f"{...}"` | An expression region holding one template (§2.7) |
 | `$;{...}`, `$;[...]` | A disabled region: inert, and not part of the displayed prose |
 | `$$` | A literal `$` in prose |
 | Any other `$` | Prose: `$50`, `$ {x}` |
@@ -484,7 +492,7 @@ Scanning rules:
 
 - **Commitment.** Once `${` or `$[` is seen, the scanner commits to code. An unterminated or malformed region is a
   diagnostic, never silently treated as prose.
-- **Balancing.** Delimiter balancing respects Strings and raw templates, so `"}"`, `"$x"`, and
+- **Balancing.** Delimiter balancing respects Strings and templates, so `"}"`, `"$x"`, and
   `f"{ } ]}"` inside code do not end a region or open another one.
 - **Disabled regions.** Their bodies are raw text, with balanced braces/brackets and closed Strings, just
   like block comments inside code. Dollars and semicolons in the body have no special meaning.

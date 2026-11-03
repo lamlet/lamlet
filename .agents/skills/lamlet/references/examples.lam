@@ -65,20 +65,21 @@ expect: "yes"
 expect: false
 expect: true
 
-Templates: typed holes, compile-time parsed. Bind Strings first (a quote would end the template).
+Templates: typed holes, expanded during the check into String concatenation, so a template is a String.
+The text is exactly as written up to }": quotes need no escapes, and a hole may hold a String.
 $[# who "Ada"]
-$[f "Hello, $who! 2 + 2 = ${+ 2 2}."] ${format "{} and {}" {' "a" {str 1}}} ${join ", " {' "x" "y"}}
+$f"{Hello, $who! 2 + 2 = ${+ 2 2}.}" ${format "{} and {}" {' "a" {str 1}}} ${join ", " {' "x" "y"}}
 expect: "Hello, Ada! 2 + 2 = 4."
 expect: "a and 1"
 expect: "x, y"
-$[latex "\frac{$who}{2}"]
-expect: {latex: "\\frac{Ada}{2}"}
-
-Raw templates: text exactly as written up to }", so quotes need no escapes and a hole may hold a String.
 $[# {said p} f"{${.name p} said "${.words p}" ${str "(twice)"}}"]
-${said {. name "Ada" words "hi"}} ${latexSource latex"{\frac{$who}{2}}"}
+${said {. name "Ada" words "hi"}} ${= f"{Hi $who}" "Hi Ada"}
 expect: "Ada said \"hi\" (twice)"
-expect: "\\frac{Ada}{2}"
+expect: true
+
+Formulas: a Latex is a record holding LaTeX source; `latex` makes one, usually from a template.
+${latex f"{\frac{$who}{2}}"}
+expect: {latex: "\\frac{Ada}{2}"}
 
 Static evaluation and compile-time assertions.
 $[# table [% {map {range 0 5} square}]]
@@ -95,7 +96,7 @@ expect: 5
 expect: <none: Unit, some: Int>
 
 Objects: records whose fields hold functions; instances from a prototype share the closure.
-$[# {_greet self} [f "Hi, I am ${.name self}."]]
+$[# {_greet self} f"{Hi, I am ${.name self}.}"]
 $[# Animal {. name "nobody" greet _greet}]
 $[# rex {.name= Animal "Rex"}]
 ${{.greet rex} rex}

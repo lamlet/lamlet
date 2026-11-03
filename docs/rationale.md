@@ -32,7 +32,7 @@ rule is needed.
 ## D2. No variadic functions; one list literal
 
 **Decision.** Operators are binary, collection functions take Lists, and `{' ...}` is the only variable-length
-form. Heterogeneous formatting is done by `[f "..."]`, whose holes are typed one by one *because it is syntax*.
+form. Heterogeneous formatting is done by templates, `f"{...}"`, whose holes are typed one by one *because it is syntax*.
 
 **Why.** A variadic calling convention needs a flag in function types, special unification between variadic and
 fixed arities, and, for heterogeneous arguments, something like rank-2 argument vectors. Such a function cannot
@@ -211,25 +211,34 @@ comments keep braces/brackets balanced and Strings closed; their bodies otherwis
 comments. Tilde remains available as an ordinary symbolic identifier. Comment text can still document the
 following declaration.
 
-## D13. Raw templates, `f"{...}"`
+## D13. One template form, `f"{...}"`; formulas are data
 
-**Decision.** `f"{text}"` and `latex"{text}"` are templates whose text runs, exactly as written, to the first
-`}"` outside a hole. Their holes are balanced code, so they may hold Strings. `[f "..."]` and `[latex "..."]`
-stay. In a document, `$f"{...}"` is a region.
+**Decision.** A template is `f"{text}"`: its text runs, exactly as written, to the first `}"` outside a hole,
+and its holes are balanced code that may hold Strings. It is expanded during checking into String
+concatenation, so it is a String; with only constant holes it folds to a constant. In a document, `$f"{...}"` is
+a region. `[f "..."]` and `[latex "..."]` are retired. A formula is std's record `Latex = {latex: String}`, made
+by `{latex s}`.
 
-**Why.** In `[f "..."]` a quote ends the template, so prose with quotes needs `\"`, and a hole cannot hold a
-String literal at all. Text without delimiters (`[f Hello, ${...}]`) would need balanced brackets and an escape
-for a lone `]`. `}"` is a terminator that ordinary text almost never contains, and the one text it excludes is
-still expressible without an escape character, as a hole: `${str "}\""}`.
+**Why.** In `[f "..."]` a quote ended the template, so prose with quotes needed `\"`, and a hole could not
+hold a String literal at all. Text without delimiters (`[f Hello, ${...}]`) would need balanced brackets and an
+escape for a lone `]`. `}"` is a terminator that ordinary text almost never contains, and the one text it
+excludes is still expressible without an escape character, as a hole: `${str "}\""}`. Two template forms with
+different escaping would be two things to learn for one job, so the bracket form went.
 
-**Alternatives.** `[f "{...}"]` would keep templates in brackets, but `[f "{a} b"]` is already a valid template
-whose text starts with a brace, so it would change meaning. `f"` was a syntax error before (a token must be
-followed by whitespace or a delimiter), so no document meant anything by it.
+`[latex "..."]` was a second template whose holes were typed differently (a Latex inserted as source, a String
+escaped). With a template that has no escapes, LaTeX source is ordinary text, so a formula needs only a type and
+a constructor, both plain std definitions. Escaping text into a formula became an explicit call
+(`latexEscape`), written in Lamlet, which removed the `K::latexEscape` primitive that existed only as the
+template's elaboration target.
 
-**Cost.** Templates were the bracket forms that parse a literal at compile time; the raw form is an atom
-instead, an exception to "brackets are where the compiler acts on syntax" (§2.3), justified as a literal, like
-a String or a number. In prose, `$f"{` now opens a region where it used to read the binding `f` followed by
-the text `"{`.
+**Alternatives.** `[f "{...}"]` would have kept templates in brackets, but `[f "{a} b"]` was already a valid
+template whose text starts with a brace. `f"` was a syntax error before (a token must be followed by whitespace
+or a delimiter), so no document meant anything by it.
+
+**Cost.** Templates are atoms, an exception to "brackets are where the compiler acts on syntax" (§2.3),
+justified as literals, like Strings and numbers. Documents using `[f "..."]` or `[latex "..."]` must be
+rewritten. In prose, `$f"{` opens a region where it used to read the binding `f` followed by the text `"{`. A
+LaTeX hole no longer escapes a String by itself: a formula that shows a name calls `latexEscape`.
 
 ## Known limitations
 

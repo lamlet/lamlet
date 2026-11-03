@@ -202,7 +202,7 @@ pub enum RegionKind {
     Brace,
     /// `$[...]`
     Bracket,
-    /// `$f"{...}"` or `$latex"{...}"`: a raw template
+    /// `$f"{...}"`: a template
     Template,
 }
 
@@ -443,7 +443,7 @@ fn match_region(file: u32, text: &str, open: usize) -> DResult<usize> {
 /// concerns was opened, if it has one.
 pub type ScanError = (String, usize, usize, Option<usize>);
 
-/// End (exclusive) of balanced code whose opener (`{` or `[`) is at `open`: Strings, comments, and raw templates
+/// End (exclusive) of balanced code whose opener (`{` or `[`) is at `open`: Strings, comments, and templates
 /// are skipped whole, so delimiters inside them do not count.
 pub fn code_end(text: &str, open: usize) -> Result<usize, ScanError> {
     let bytes = text.as_bytes();
@@ -463,7 +463,7 @@ pub fn code_end(text: &str, open: usize) -> Result<usize, ScanError> {
                 i = raw_form_end(text, i + 1).map_err(|(m, a, b)| (m, a, b, None))?;
                 continue;
             }
-            // A raw template, `f"{...}"` or `latex"{...}"`.
+            // A template, `f"{...}"`.
             b'f' | b'l' if raw_template_open(text, i).is_some() => {
                 i = raw_template_end(text, raw_template_open(text, i).unwrap())?;
                 continue;
@@ -506,7 +506,7 @@ pub fn code_end(text: &str, open: usize) -> Result<usize, ScanError> {
     Err(("unterminated active region".into(), at.saturating_sub(1), text.len(), None))
 }
 
-/// When a raw template (`f"{...}"` or `latex"{...}"`) opens at `i`, where its body starts. The head must start a
+/// When a template (`f"{...}"`) opens at `i`, where its body starts. The head must start a
 /// token: it follows the start of the text, whitespace, or a delimiter.
 pub fn raw_template_open(text: &str, i: usize) -> Option<usize> {
     let starts_token = text[..i].chars().next_back().is_none_or(|p| p.is_whitespace() || matches!(p, '{' | '[' | '}' | ']'));
@@ -516,12 +516,12 @@ pub fn raw_template_open(text: &str, i: usize) -> Option<usize> {
     raw_template_head(text, i)
 }
 
-/// Where a raw template's body starts, when `text` at `i` starts with `f"{` or `latex"{`.
+/// Where a template's body starts, when `text` at `i` starts with `f"{`.
 fn raw_template_head(text: &str, i: usize) -> Option<usize> {
-    ["f\"{", "latex\"{"].iter().find(|head| text[i..].starts_with(**head)).map(|head| i + head.len())
+    text[i..].starts_with("f\"{").then_some(i + 3)
 }
 
-/// End (exclusive, after the closing `}"`) of a raw template whose body starts at `body`. The body ends at the
+/// End (exclusive, after the closing `}"`) of a template whose body starts at `body`. The body ends at the
 /// first `}"` outside a hole; `$$` is skipped, and a `${...}`/`$[...]` hole is balanced code (§`code_end`), so it
 /// may hold Strings and other templates.
 pub fn raw_template_end(text: &str, body: usize) -> Result<usize, ScanError> {

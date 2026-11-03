@@ -6,16 +6,30 @@ bytecode version (`BYTECODE_VERSION`) are tracked separately from the crate vers
 
 ## Unreleased
 
-Language version 0.3.0. Documents written for 0.2.0 keep working, except prose with `$f"{` or `$latex"{`, which
-now opens a region.
+Language version 0.3.0. Templates have one form, `f"{...}"`: documents using `[f "..."]` or `[latex "..."]` must
+be rewritten, and prose with `$f"{` now opens a region.
 
 ### Added
 
-- Raw templates: `f"{Hello, I am "${.name p}", $age years old.}"` and `latex"{...}"`. The text runs, exactly as
-  written, to the first `}"` outside a hole, with no escapes, so quotes, backslashes, and unbalanced brackets
-  need none. Holes are balanced code and may contain Strings and other templates. In a document,
-  `$f"{...}"` is a region. `[f "..."]` and `[latex "..."]` are unchanged (language change; spec §2.3,
-  rationale D13).
+- Templates are written `f"{Hello, I am "${.name p}", $age years old.}"`. The text runs, exactly as written, to
+  the first `}"` outside a hole, with no escapes, so quotes, backslashes, and unbalanced brackets need none.
+  Holes are balanced code and may contain Strings and other templates. In a document, `$f"{...}"` is a region
+  (language change; spec §2.7, rationale D13).
+- std's `latex`, `Fn([String], Latex)`, makes a formula from LaTeX source (`{latex f"{\frac{$a}{2}}"}`), and
+  `latexEscape`, `Fn([String], String)`, turns text into LaTeX that typesets it literally.
+
+### Changed
+
+- A template is folded to a constant only when every hole is a constant. A template whose holes used no local
+  variables used to be evaluated during the check, so a hole calling a Runtime native (`${time}`) was a stage
+  error.
+
+### Removed
+
+- The bracket templates `[f "..."]` and `[latex "..."]` are retired, and are now unknown bracket forms (a syntax
+  error). Write `f"{...}"` and `{latex f"{...}"}`. A String in a LaTeX hole is no longer escaped by itself; call
+  `latexEscape`.
+- The primitive `K::latexEscape`, which existed only for `[latex]` (std's `latexEscape` is written in Lamlet).
 
 ## 0.3.1 (2026-11-02)
 

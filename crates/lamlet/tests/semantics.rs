@@ -137,7 +137,7 @@ fn logged(body: &str) -> String {
 
 #[test]
 fn readme_example() {
-    assert_eq!(one(&s("$[# square {^ {x} {* x x}}]\n$[f \"The square of 6 is ${square 6}.\"]")), "\"The square of 6 is 36.\"");
+    assert_eq!(one(&s("$[# square {^ {x} {* x x}}]\n$f\"{The square of 6 is ${square 6}.}\"")), "\"The square of 6 is 36.\"");
 }
 
 #[test]
@@ -442,7 +442,7 @@ fn static_evaluation() {
 #[test]
 fn static_availability_is_syntactic() {
     // Literals, lambdas over static values, static names, [% ...], and literal forms of static parts are static.
-    assert_eq!(eval(&s("$[# a 3] $[# f {^ {x} {+ x a}}] $[# l {' 1 2}] $[# r {. x a}] $[# t [f \"$a\"]] $[% {f {+ {length l} {.x r}}}] $[% t]")), vec![
+    assert_eq!(eval(&s("$[# a 3] $[# f {^ {x} {+ x a}}] $[# l {' 1 2}] $[# r {. x a}] $[# t f\"{$a}\"] $[% {f {+ {length l} {.x r}}}] $[% t]")), vec![
         "8", "\"3\""
     ]);
     // A computation is runtime unless explicitly staged, even if it could be folded.
@@ -481,7 +481,7 @@ fn assert_macro() {
 
 #[test]
 fn stl_standalone_example() {
-    let src = s("$[# next\n    [% {: {^ {x} {+ x 1}}\n          [% {Fn {' Int} Int}]}]\n]\n$[# nums [% {map {' 1 2 3} next}]]\n$[# checkedNums {!assert nums {' 2 3 4}}]\n$[# total [% {fold checkedNums 0 +}]]\n$[# checkedTotal {!assert total 9}]\n$[f \"The total is $checkedTotal.\"]");
+    let src = s("$[# next\n    [% {: {^ {x} {+ x 1}}\n          [% {Fn {' Int} Int}]}]\n]\n$[# nums [% {map {' 1 2 3} next}]]\n$[# checkedNums {!assert nums {' 2 3 4}}]\n$[# total [% {fold checkedNums 0 +}]]\n$[# checkedTotal {!assert total 9}]\n$f\"{The total is $checkedTotal.}\"");
     assert_eq!(eval(&src), vec!["\"The total is 9.\""]);
 }
 
@@ -544,22 +544,24 @@ fn strings_and_formatting() {
     fails_with(&s("${format \"{}\" {'}}"), DiagKind::Runtime, "too few arguments");
     fails_with(&s("${format \"{\" {' \"1\"}}"), DiagKind::Runtime, "unmatched {");
     // Template holes are typed one by one, at compile time.
-    assert_eq!(one(&s("$[# n 3] $[# who \"Ann\"] $[# many \"many\"] $[# single \"one\"] $[f \"$who has $n items: ${!if {> n 1} many single}\"]")), "\"Ann has 3 items: many\"");
-    fails_with(&s("$[f \"${str \"x\"}\"]"), DiagKind::Syntax, "cannot contain a String literal");
-    fails_with(&s("$[# xs {' 1}] $[f \"$xs\"]"), DiagKind::Type, "template hole");
+    assert_eq!(one(&s("$[# n 3] $[# who \"Ann\"] $[# many \"many\"] $[# single \"one\"] $f\"{$who has $n items: ${!if {> n 1} many single}}\"")), "\"Ann has 3 items: many\"");
+    assert_eq!(one(&s("$f\"{${str \"x\"} said \"hi\"}\"")), "\"x said \\\"hi\\\"\"");
+    fails_with(&s("$[# xs {' 1}] $f\"{$xs}\""), DiagKind::Type, "template hole");
+    fails_with(&s("$[f \"x\"]"), DiagKind::Syntax, "unknown bracket form `[f ...]`");
     // Evaluated Strings are data, never code.
     assert_eq!(one(&s("${++ \"$\" \"{+ 1 2}\"}")), "\"${+ 1 2}\"");
 }
 
 #[test]
-fn latex_templates() {
-    assert_eq!(eval(&s("$[# a [latex \"x^2\"]] $[latex \"\\sqrt{$a + ${+ 1 2}}\"] ${latexSource [latex \"$$\\alpha\"]}")), vec![
+fn latex_formulas() {
+    // A Latex is std's record {latex: String}, made from a template whose backslashes are text.
+    assert_eq!(eval(&s("$[# a {latex \"x^2\"}] ${latex f\"{\\sqrt{${latexSource a} + ${+ 1 2}}}\"} ${latexSource {latex f\"{$$\\alpha}\"}}")), vec![
         "{latex: \"\\\\sqrt{x^2 + 3}\"}",
         "\"$\\\\alpha\""
     ]);
-    // Strings inserted into LaTeX are escaped; Latex values are inserted as source.
-    assert_eq!(one(&s("$[# label \"a_b\"] ${latexSource [latex \"$label\"]}")), "\"a\\\\_b\"");
-    fails_with(&s("$[# xs {' 1}] $[latex \"$xs\"]"), DiagKind::Type, "template hole");
+    // Text to typeset literally is escaped explicitly.
+    assert_eq!(one(&s("$[# label \"a_b\"] ${latexSource {latex f\"{\\text{${latexEscape label}}}\"}}")), "\"\\\\text{a\\\\_b}\"");
+    fails_with(&s("$[latex \"x\"]"), DiagKind::Syntax, "unknown bracket form `[latex ...]`");
 }
 
 #[test]

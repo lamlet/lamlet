@@ -53,7 +53,7 @@ How a region's value becomes output:
 
 To show your own type well, convert it: `$[# {showPoint p} f"{(${.x p}, ${.y p})}"]`.
 
-Text with values in it is a raw template region, `$f"{...}"`: `She said $f"{"hi", I am $who}" today.` Its text
+Text with values in it is a template region, `$f"{...}"`: `She said $f"{"hi", I am $who}" today.` Its text
 is copied as written and escaped like any String (it is a String). `${f"{...}"}` is wrong: `${...}` holds a
 form, and the form `{x}` calls `x`.
 
@@ -126,13 +126,13 @@ region's position (`this is markup for `html`, which cannot be written as Markdo
 ```text
 $[Import* std]$[Import* content]
 $[# rooms [% {' {. name "study" area 12} {. name "hall" area 20}}]]
-$[# {row r} {' {.name r} [f "${.area r} m²"]}]
+$[# {row r} {' {.name r} f"{${.area r} m²}"}]
 
 ${table {' "Room" "Area"} {map rooms row}}
 
 ${bulletsOf {map rooms .name}}
 
-${numbered {map rooms {^ {r} {cat {' {strong {.name r}} {text [f ": ${.area r} m²"]}}}}}}
+${numbered {map rooms {^ {r} {cat {' {strong {.name r}} {text f"{: ${.area r} m²}"}}}}}}
 
 The study is ${!if {> 12 10} {strong "large"} {text "small"}}.
 ```

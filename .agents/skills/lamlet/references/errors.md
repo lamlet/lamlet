@@ -29,7 +29,9 @@ often give the fix.
 | `[# b {+ 1 2}] [% b]` | ``stage error: a static expression cannot use the runtime binding `b` `` | Stage the definition: `[# b [% {+ 1 2}]]` |
 | `[# T {List Int}] {: xs T}` | ``stage error: a static expression cannot use the runtime binding `T` `` | `[# T [% {List Int}]]`, or write the type in place: `{: xs {List Int}}` |
 | A Runtime native inside `[% ...]` | `stage error: ... requires Runtime capabilities ...` | Call it at runtime, or use a Pure or Static native |
-| `[f "${str "x"}"]` | ``syntax error: a `$` hole in a template cannot contain a String literal`` | Use a raw template, `f"{${str "x"}}"`, or bind the String first: `[# s "x"] [f "$s"]` |
+| `[f "Hi $name"]` (Lamlet before 0.3) | ``syntax error: unknown bracket form `[f ...]` `` | `f"{Hi $name}"` |
+| `[latex "x^2"]` (Lamlet before 0.3) | ``syntax error: unknown bracket form `[latex ...]` `` | `{latex "x^2"}`, or `{latex f"{x^$n}"}` |
+| `"\frac{1}{2}"` | ``syntax error: unknown escape `\f` (for LaTeX, write a template f"{...}", where backslashes are literal)`` | `f"{\frac{1}{2}}"` |
 | `${f"{hi}"}`, or `f"{I am ${age}}"` | ``type error: a value of type String is not callable`` | `${...}` holds a form, and `{x}` calls `x`: write `$f"{hi}"` in prose and `$age` in a hole |
 | `f"{text` (no closing `}"`) | ``syntax error: unterminated template: its text ends at the first `}"` outside a `$` hole`` | Close it with `}"`; a literal `}"` in the text is a hole, `${str "}\""}` |
 | `{1.+ 2}` | ``syntax error: a method name after `.` must be a word identifier`` | `{+ 1 2}` |

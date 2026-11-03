@@ -1,0 +1,12 @@
+A template is expanded during the check into String concatenation: it is a String like any other. With only
+constant holes it is folded to a constant; a hole that calls a Runtime native runs at runtime.
+$[Import* std]
+$[# who "Ada"]
+$[# greeting f"{Hi $who}"]
+$[% greeting] ${= greeting "Hi Ada"} $[% f"{x ${+ 1 2}}"]
+expect: "Hi Ada"
+expect: true
+expect: "x 3"
+$f"{now ${time}}"
+input: std.time=5
+expect: "now 5"

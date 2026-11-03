@@ -33,7 +33,7 @@ of document are extensions in their own repositories, such as `lamlet-present` f
 ```text
 $[Import* std]
 $[# {square x} {* x x}]
-$[f "The square of 6 is ${square 6}."]
+$f"{The square of 6 is ${square 6}.}"
 ```
 
 The language is a small typed lambda calculus (call by value, exact arity, explicit staging) with structural

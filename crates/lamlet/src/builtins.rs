@@ -185,7 +185,6 @@ pub static INTRINSICS: &[Intrinsic] = &[
         v(Value::List(List::from_vec(s.chars().map(|c| Value::Str(Rc::from(c.to_string()))).collect())))
     }),
     intrinsic!("scalarString", "forall s:Scalar. Fn([s], String)", 1, |a| v(Value::Str(Rc::from(scalar_string(&a[0])?)))),
-    intrinsic!("latexEscape", "Fn([String], String)", 1, |a| v(Value::Str(Rc::from(latex_escape(&str_of(&a[0])?))))),
     intrinsic!("debugString", "Fn([a], String)", 1, |a| v(Value::Str(Rc::from(display(&a[0]))))),
     intrinsic!("fail", "Fn([String], a)", 1, |a| Err(str_of(&a[0])?.to_string())),
     // Type descriptors: ordinary pure functions over Type data.
@@ -529,24 +528,6 @@ pub fn fixed(x: f64, digits: usize) -> String {
     }
 }
 
-/// Escape text for insertion into a LaTeX formula. Characters with a math-safe escape use it; `\`, `^`, and
-/// `~` (which have none) become `\text{...}` symbols.
-pub fn latex_escape(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for c in s.chars() {
-        match c {
-            '{' | '}' | '$' | '&' | '#' | '%' | '_' => {
-                out.push('\\');
-                out.push(c);
-            }
-            '\\' => out.push_str("\\text{\\textbackslash}"),
-            '^' => out.push_str("\\text{\\textasciicircum}"),
-            '~' => out.push_str("\\text{\\textasciitilde}"),
-            _ => out.push(c),
-        }
-    }
-    out
-}
 
 pub fn scalar_string(x: &Value) -> Result<String, String> {
     Ok(match x {

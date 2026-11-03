@@ -1,4 +1,4 @@
+There is no bracket template: `[f ...]` is an unknown bracket form.
 $[Import* std]
-$[# p 1]
-$[f "${concat "a" "b"}"]
-expect-error: syntax: cannot contain a String literal
+$[f "Hi"]
+expect-error: syntax: unknown bracket form `[f ...]`

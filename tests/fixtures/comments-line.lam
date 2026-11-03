@@ -14,8 +14,8 @@ expect: 42
 ${' 1;;no space needed after a token
 }
 expect: [1]
-$[f "Sum: ${+ 1 ;; ignore } and ] here
-    2}."]
+$f"{Sum: ${+ 1 ;; ignore } and ] here
+    2}.}"
 expect: "Sum: 3."
-$[f "Sum: ${+ 1 ;[ignore $missing and {}] 2}."]
+$f"{Sum: ${+ 1 ;[ignore $missing and {}] 2}.}"
 expect: "Sum: 3."

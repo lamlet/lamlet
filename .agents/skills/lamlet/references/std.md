@@ -123,9 +123,11 @@ Each entry: name, then its doc (which starts with its type when it has one). `_n
 - `join` — Fn([String, List(String)], String). Concatenates with sep between neighbours.
 - `substr` — Fn([String, Int, Int], String). The len scalars starting at index start (zero-based), clipped to the String: {"Hello!".substr 0 3} is "Hel".
 - `split` — Fn([String, String], List(String)). The pieces between occurrences of sep, a one-scalar String: {"a,b,,c".split ","} is ["a", "b", "", "c"].
-- `format` — Fn([String, List(String)], String). Replaces each {} in the template by the next argument; {{ and }} are literal braces. Too few or too many arguments is an error. For typed holes, prefer [f "..."].
-- `Latex` — The Type of [latex "..."] formulas: a record holding LaTeX source, so hosts can render it as math.
+- `format` — Fn([String, List(String)], String). Replaces each {} in the template by the next argument; {{ and }} are literal braces. Too few or too many arguments is an error. For typed holes, prefer a template f"{...}".
+- `Latex` — The Type of formulas: a record holding LaTeX source, so hosts can render it as math.
+- `latex` — Fn([String], Latex). A formula from its LaTeX source, often a template: {latex f"{\frac{1}{2}}"}.
 - `latexSource` — Fn([Latex], String). The LaTeX source of a formula.
+- `latexEscape` — Fn([String], String). Text as LaTeX source that typesets it literally, for putting a name or a label into a formula: {latexEscape "a_b"} is "a\_b".
 
 ## 9. Assertions, hashing, and host time
 

@@ -36,7 +36,7 @@ Elaboration targets:
 | `.l`, `.l=`, `#l` | Constants (`LabelFn::Get`/`Set`/`Tag`) |
 | `{^ f {...} ...}` | `Core::Lambda { self_id }` |
 | `K::caseBool` applied to two literal thunks | `Core::If` (by identity) |
-| Templates | `K::stringAppend` chains over `K::scalarString`/`K::latexEscape` |
+| Templates | `K::stringAppend` chains over `K::scalarString`; folded to a constant when every hole is one |
 
 List, record, and template literals whose parts are constants are folded into constants. This is also what
 makes them statically available (spec §5).

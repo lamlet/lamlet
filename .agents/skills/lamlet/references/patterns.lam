@@ -29,7 +29,7 @@ expect: 3
 index. A recursive function walks it by index (non-tail recursion is fine at this depth).
 $[# tree [% {' {. label "root" kids {' 1 2}} {. label "a" kids {' 3}} {. label "b" kids {'}} {. label "c" kids {'}}}]]
 $[# {count nodes i} {fold {.kids {nth nodes i}} 1 {^ {acc k} {+ acc {count nodes k}}}}]
-$[# {paths nodes i prefix} [# here [f "$prefix/${.label {nth nodes i}}"]]
+$[# {paths nodes i prefix} [# here f"{$prefix/${.label {nth nodes i}}}"]
   {cons here {flatten {map {.kids {nth nodes i}} {^ {k} {paths nodes k here}}}}}]
 ${count tree 0} ${paths tree 0 ""}
 expect: 4
@@ -52,7 +52,7 @@ expect: {first: 3, second: "a!!"}
 
 6. Records are row-polymorphic in functions, but every list has one element type. To treat records of different
 shapes alike, map each one to a common record first.
-$[# {label r} [f "${.name r} (${.age r})"]]
+$[# {label r} f"{${.name r} (${.age r})}"]
 $[# cat {. name "Tom" age 3 lives 9}]
 $[# owner {. name "Ann" age 40 email "a@b.c"}]
 ${' {label cat} {label owner}}

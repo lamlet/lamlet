@@ -377,14 +377,29 @@ $[# {_render cs args}
 ]
 
 Fn([String, List(String)], String). Replaces each {} in the template by the next argument; {{ and }} are
-literal braces. Too few or too many arguments is an error. For typed holes, prefer [f "..."].
+literal braces. Too few or too many arguments is an error. For typed holes, prefer a template f"{...}".
 $[# {format template args} {_render {chars template} args}]
 
-The Type of [latex "..."] formulas: a record holding LaTeX source, so hosts can render it as math.
+The Type of formulas: a record holding LaTeX source, so hosts can render it as math.
 $[# Latex [% {Struct {' {Field "latex" String}}}]]
+
+Fn([String], Latex). A formula from its LaTeX source, often a template: {latex f"{\frac{1}{2}}"}.
+$[# {latex source} {: {. latex source} Latex}]
 
 Fn([Latex], String). The LaTeX source of a formula.
 $[# latexSource .latex]
+
+Private. One scalar of text, as LaTeX source.
+$[# {_latexChar c}
+    {!if {contains {' "{" "}" "$" "&" "#" "%" "_"} c} {++ "\\" c}
+        {!if {= c "\\"} "\\text{\\textbackslash}"
+            {!if {= c "^"} "\\text{\\textasciicircum}"
+                {!if {= c "~"} "\\text{\\textasciitilde}" c}}}}
+]
+
+Fn([String], String). Text as LaTeX source that typesets it literally, for putting a name or a label into a
+formula: {latexEscape "a_b"} is "a\_b".
+$[# {latexEscape s} {concat {map {chars s} _latexChar}}]
 
 9. Assertions, hashing, and host time
 

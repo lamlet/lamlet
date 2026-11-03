@@ -972,43 +972,31 @@ impl<'s> Checker<'s> {
                 Ok((t, Core::Const(v)))
             }
             Expr::Macro(parts, operands, span) => self.expand(parts, operands, *span),
-            Expr::Template(kind, parts, span) => self.template(*kind, parts, *span),
+            Expr::Template(parts, span) => self.template(parts, *span),
         }
     }
 
-    /// `[f ...]`/`[latex ...]`: append the parts left to right; holes are evaluated once, in order. A Latex
-    /// value is the record `{latex: String}`; in a `[latex]` hole it contributes its source, while scalars are
-    /// formatted and (for Strings) escaped. Holes of any other type are type errors.
-    fn template(&mut self, kind: syntax::TemplateKind, parts: &[syntax::Part], span: Span) -> CheckResult<(Ty, Core)> {
+    /// `f"{...}"`: expanded here into String concatenation, so a template is an ordinary String expression. The
+    /// parts are appended left to right; holes are evaluated once, in order, and must be scalars, which are
+    /// formatted. Holes of any other type are type errors. When every hole is a constant (a literal or a static
+    /// name), the whole template is folded to a constant String; a hole that calls anything is left to run at
+    /// its stage, so a template never evaluates a call early.
+    fn template(&mut self, parts: &[syntax::Part], span: Span) -> CheckResult<(Ty, Core)> {
         let prim = |name: &str| Box::new(Core::Const(Value::Builtin(Builtin::by_name(name).expect("intrinsic"))));
-        let call1 = |name: &str, a: Core, span: Span| Core::Call { f: prim(name), args: vec![a], span };
-        let latex_label: Rc<str> = Rc::from(LATEX_LABEL);
+        let mut constant = true;
         let mut acc: Option<Core> = None;
         for p in parts {
             let piece = match p {
                 syntax::Part::Lit(s) => Core::Const(Value::str(s)),
                 syntax::Part::Hole(e) => {
                     let (t, c) = self.expr(e)?;
-                    let is_latex = matches!(self.s.tcx.resolve(&t), Ty::Record(fs) if fs.len() == 1 && fs[0].0 == latex_label);
-                    if kind == syntax::TemplateKind::Latex && is_latex {
-                        let get = Box::new(Core::Const(Value::Label(Rc::new(LabelFn::Get(latex_label.clone())))));
-                        Core::Call { f: get, args: vec![c], span: e.span() }
-                    } else {
-                        let scalar = Cons { scalar: true, ..Cons::default() };
-                        let level = self.level;
-                        self.s.tcx.check_cons(&t, scalar, level).map_err(|_| {
-                            let allowed = match kind {
-                                syntax::TemplateKind::Format => "a String, Int, Float, Bool, or Unit",
-                                syntax::TemplateKind::Latex => "Latex, a String (escaped), Int, Float, Bool, or Unit",
-                            };
-                            derr(DiagKind::Type, format!("a template hole must be {}, not {}", allowed, self.show(&t)), e.span())
-                        })?;
-                        let text = call1("scalarString", c, e.span());
-                        match kind {
-                            syntax::TemplateKind::Format => text,
-                            syntax::TemplateKind::Latex => call1("latexEscape", text, e.span()),
-                        }
-                    }
+                    let scalar = Cons { scalar: true, ..Cons::default() };
+                    let level = self.level;
+                    self.s.tcx.check_cons(&t, scalar, level).map_err(|_| {
+                        derr(DiagKind::Type, format!("a template hole must be a String, Int, Float, Bool, or Unit, not {}", self.show(&t)), e.span())
+                    })?;
+                    constant &= matches!(c, Core::Const(_));
+                    Core::Call { f: prim("scalarString"), args: vec![c], span: e.span() }
                 }
             };
             acc = Some(match acc {
@@ -1017,15 +1005,8 @@ impl<'s> Checker<'s> {
             });
         }
         let mut core = acc.unwrap_or_else(|| Core::Const(Value::str("")));
-        let ty = match kind {
-            syntax::TemplateKind::Format => STRING,
-            syntax::TemplateKind::Latex => {
-                let ctor = Box::new(Core::Const(Value::Label(Rc::new(LabelFn::Record(vec![latex_label.clone()])))));
-                core = Core::Call { f: ctor, args: vec![core], span };
-                Ty::Record(vec![(latex_label, STRING)])
-            }
-        };
-        if core.free_locals().is_empty() && !core.uses_globals() && !matches!(core, Core::Const(_)) {
+        let ty = STRING;
+        if constant && !matches!(core, Core::Const(_)) {
             core = Core::Const(self.s.eval_static(&core, span)?);
         }
         Ok((ty, core))
@@ -1230,5 +1211,3 @@ impl<'s> Checker<'s> {
 
 }
 
-/// The label of the single field of a Latex value (`{latex: String}`).
-pub const LATEX_LABEL: &str = "latex";

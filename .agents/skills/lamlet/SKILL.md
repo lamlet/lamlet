@@ -29,10 +29,10 @@ Related skills: **`lamlet-documents`** (pages: headings, tables, `content`, Mark
 
 ## 1. The mental model, in seven rules
 
-1. **Documents.** Only `$`-regions are code: `${expr}`, `$[form]`, `$name`. Everything else is ignored prose,
+1. **Documents.** Only `$`-regions are code: `${expr}`, `$[form]`, `$name`, `$f"{…}"`. Everything else is prose,
    and `$$` is a literal dollar. Inside a region you write plain code, with no more dollars.
 2. **Braces are expressions; brackets are compiler directives.** `{f a b}` applies `f`. `[...]` declares,
-   imports, stages, or parses a template.
+   imports, or stages. (Templates, `f"{…}"`, are the one literal the compiler parses.)
 3. **Strict and exact.** Arguments are evaluated once, left to right, before the call. Arity is exact: there is
    no currying, no partial application, and no variadics.
 4. **One meaning per name.** Names resolve lexically. No dispatch depends on types, so wrapping anything in a
@@ -68,10 +68,9 @@ x.f   {x.f a b}   x.f.g call sugar: {f x}, {f x a b}, {g {f x}}  (no space befor
 [# {f x y} decl* body]  function definition: [# f {^ f {x y} decl* body}], so f may recurse
 [# a 1 {f x} body b 2]  several bindings in one declaration, in source order (let*)
 [% expr]                evaluate at compile time; the result is embedded as a constant
-[f "Hi $name, ${expr}"] string template: each hole is typed (Scalar); $$ is a literal $
-[latex "\frac{$a}{2}"]  LaTeX template: raw backslashes; result type Latex = {latex: String}
-f"{He said "hi", $name}"  raw template (an atom): text as written up to the first }" outside a hole; no
-latex"{\frac{$a}{2}}"     escapes; holes may hold Strings. Same value as [f "..."] / [latex "..."]
+f"{Hi "$name", ${e}}"   template, a String: text exactly as written up to the first }" outside a hole (no
+                        escapes); holes $name, ${form}, $[form] are typed (Scalar); $$ is a literal $
+{latex f"{\frac{$a}{2}}"} a formula: std's Latex = {latex: String} (no LaTeX template form)
 [Import p]  [Import* p]  [ImportAs p alias]            imports (lexical, source order)
 [Macro !name {pattern template} ...]                   pattern macro
 [Native name {Fn {' A B} R} "api.id/x" Pure|Static|Runtime]   typed host function (signature runs as [% …])
@@ -115,7 +114,7 @@ A `.lam` file is a document (spec §10). Only `$`-spellings are active:
 | `$name`, `$pkg::name` | reads a binding, no call. A following `.` is prose: `I am $AGE.` reads `AGE` |
 | `${…}` | an expression region |
 | `$[…]` | a declaration, import, macro, native, `[% ]`, or template |
-| `$f"{…}"`, `$latex"{…}"` | a raw template as a region: `I am $f"{${.age p} years}" old` |
+| `$f"{…}"` | a template as a region: `I am $f"{${.age p} years}" old` |
 | `$;{…}`, `$;[…]` | a disabled region: inert text, dropped from the output |
 | `$$` | a literal `$`; any other `$` not followed by a name, `{`, or `[` is prose (`$5`, `$ {x}`) |
 
@@ -267,10 +266,11 @@ polymorphism through bindings, parsing with options, state machines, `!pipe`/`!l
 from data, and curve combinators. `cargo test` checks every `expect:` line in both. Patterns to reach for:
 
 - **Loops:** use `fold`, `map`, `filter`, and `range`, or a tail-recursive named lambda with an accumulator.
-- **Text:** use `f"{...}"` (or `[f "..."]`) for typed interpolation. Prefer the raw form when the text has
-  quotes or a hole needs a String: `f"{${.name p} said "${.words p}"}"`. A hole holds a *form*, so `${age}`
-  calls `age`: read a binding with `$age`, a field with `${.age p}`. Likewise `${f"{…}"}` calls the String;
-  in prose write `$f"{…}"`. `format` takes `List(String)`, so convert values with `str`
+- **Text:** use `f"{...}"` for typed interpolation: `f"{${.name p} said "${.words p}"}"`. It is expanded
+  during the check into concatenation, so it is a plain String (a constant when its holes are). A hole holds a
+  *form*, so `${age}` calls `age`: read a binding with `$age`, a field with `${.age p}`. Likewise `${f"{…}"}`
+  calls the String; in prose write `$f"{…}"`. A literal `}"` in the text is a hole: `${str "}\""}`.
+- **Formulas:** `{latex f"{\frac{$a}{2}}"}` (a `Latex`); put a name in one with `${latexEscape name}`. `format` takes `List(String)`, so convert values with `str`
   first. `++` concatenates two Strings; `concat` and `join` work on lists. `chars` splits a String into scalars,
   and `substr`/`split` work on Strings.
 - **Options:** `some`, `none`, `withDefault`, `caseOption`.
@@ -322,7 +322,7 @@ The top ten (more, with exact diagnostics, in `references/errors.md`):
 | `{p.name}` to read a field | `{.name p}` |
 | `std.map`, `K.add` | `std::map`, `K::add` |
 | `{list 1 2}`, `{concat "a" "b"}` | `{' 1 2}`, `{++ "a" "b"}` |
-| `[f "${str "x"}"]` (quote in a hole) | `f"{${str "x"}}"`, or `[# s "x"] [f "$s"]` |
+| `[f "Hi $name"]`, `[latex "x^2"]` (before 0.3) | `f"{Hi $name}"`, `{latex "x^2"}` |
 | `f"{I am ${age}}"`, `${f"{…}"}` | `f"{I am $age}"`; `$f"{…}"` in prose (a hole or `${}` holds a form, which calls) |
 | Static code using `[# x {...}]` | `[# x [% {...}]]` |
 

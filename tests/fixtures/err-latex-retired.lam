@@ -1,0 +1,3 @@
+$[Import* std]
+$[latex "x^2"]
+expect-error: syntax: unknown bracket form `[latex ...]`

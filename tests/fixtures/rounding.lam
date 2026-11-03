@@ -18,7 +18,7 @@ expect: "0.00"
 ${fixed 0.125 2} ${fixed 2.675 2}
 expect: "0.12"
 expect: "2.67"
-$[f "about ${fixed {/ 1.0 3.0} 3} seconds"]
+$f"{about ${fixed {/ 1.0 3.0} 3} seconds}"
 expect: "about 0.333 seconds"
 ${round {: 0.0 Float}}
 expect: 0

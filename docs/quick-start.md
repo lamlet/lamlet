@@ -216,7 +216,7 @@ every type and wrapping it in a lambda changes nothing. Keep these distinctions 
   so they share one closure:
 
 ```text
-$[# {_greet self} [f "Hi, I am ${.name self}."]]
+$[# {_greet self} f"{Hi, I am ${.name self}.}"]
 $[# Person {. name "nobody" greet _greet}]
 $[# ada {.name= Person "Ada"}]
 ${{.greet ada} ada}                  ;; "Hi, I am Ada."
@@ -289,22 +289,16 @@ Other type builders are `List`, `Fn`, `Variant`, `Option`, and `Pair`. Types are
 
 ## 8. Strings and templates
 
-`[f "..."]` is a string template. Holes are `$name` or `${expr}`; each hole is type-checked and must be a
-scalar.
+`f"{...}"` is a string template. Holes are `$name` or `${expr}`; each hole is type-checked and must be a
+scalar. The text, exactly as written, runs to the first `}"` outside a hole: quotes and backslashes need no
+escapes, and a hole may hold a String. A template is expanded during the check into String concatenation, so it
+is an ordinary String.
 
 ```text
 $[# who "Ada"]
-$[f "Hello, $who! 2 + 2 = ${+ 2 2}."]                 ;; "Hello, Ada! 2 + 2 = 4."
-```
-
-In `[f "..."]` a quote ends the template, so a quote in the text is written `\"` and a hole cannot contain a
-String literal. The raw form `f"{...}"` has neither limit: its text, exactly as written, runs to the first `}"`
-outside a hole, with no escapes.
-
-```text
+$f"{Hello, $who! 2 + 2 = ${+ 2 2}.}"                ;; Hello, Ada! 2 + 2 = 4.
 $[# {quote p} f"{${.name p} said "${.words p}"}"]   ;; Ada said "hi" (for {. name "Ada" words "hi"})
 $f"{a ${str "x"} b}"                                 ;; a x b: a hole may hold a String
-In prose, $f"{I am $who.}" is a region.              ;; In prose, I am Ada. is a region.
 ```
 
 A hole `${...}` holds a form, so `${age}` *calls* `age`; read a binding with `$age`. There is also a runtime
@@ -315,8 +309,8 @@ ${format "{} and {}" {' "a" {str 1}}}     ;; "a and 1"
 ${join ", " {' "x" "y"}}                  ;; "x, y"
 ```
 
-`[latex "..."]` (or `latex"{...}"`) is the same idea for formulas. Backslashes are literal, and the result has
-type `Latex`.
+A formula is a `Latex`, std's record `{latex: String}`. Make one from a template, whose backslashes are text:
+`{latex f"{\frac{$who}{2}}"}`. To show a name in a formula, escape it: `{latex f"{\text{${latexEscape name}}}"}`.
 
 ## 9. Packages and the primitives
 

@@ -23,7 +23,7 @@ expect: 42
 expect: 1
 Objects are records; methods are fields holding functions. Instances made from a prototype share one closure:
 `.name=` copies only the record's field table (values are shared, never deep-copied).
-$[# {_greet self} [f "Hi, I am ${.name self}."]]
+$[# {_greet self} f"{Hi, I am ${.name self}.}"]
 $[# Person {. name "nobody" greet _greet}]
 $[# ada {.name= Person "Ada"}]
 ${{.greet ada} ada} ${{.greet Person} Person}

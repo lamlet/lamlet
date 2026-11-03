@@ -48,7 +48,7 @@ ${.name person}
 expect: "value 7"
 $[# {describe option} {match option {.
         none {^ {ignored} "missing"}
-        some {^ {value} [f "value $value"]}
+        some {^ {value} f"{value $value}"}
     }}]
 ${describe {#some 7}}
 expect: "missing"

@@ -123,7 +123,7 @@ fn time_snapshot() {
 
 #[test]
 fn call_functions_with_typed_json_arguments() {
-    let source = "$[Import* std]\n$[# frames {^ {seconds fps} {round {* seconds {float fps}}}}]\n$[# P [% {Struct {' {Field \"x\" Float} {Field \"label\" String}}}]]\n$[# describe {^ {p} [# label {.label {: p P}}] [# x {fixed {.x p} 2}] [f \"$label at $x\"]}]\n$[# n 3]\n$[# live {time}]";
+    let source = "$[Import* std]\n$[# frames {^ {seconds fps} {round {* seconds {float fps}}}}]\n$[# P [% {Struct {' {Field \"x\" Float} {Field \"label\" String}}}]]\n$[# describe {^ {p} [# label {.label {: p P}}] [# x {fixed {.x p} 2}] f\"{$label at $x}\"}]\n$[# n 3]\n$[# live {time}]";
     let req = serde_json::json!({"version": 1, "command": "call", "inputs": {"std.time": 5},
         "documents": [{"name": "t", "source": source, "calls": [
             {"function": "frames", "args": [1.25, 30]},

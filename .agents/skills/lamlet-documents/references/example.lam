@@ -1,7 +1,7 @@
 $[Import* std]$[Import* content]
 $[# rooms [% {' {. name "study" area 12} {. name "hall" area 20} {. name "kitchen" area 9}}]]
 $[# total [% {fold rooms 0 {^ {acc r} {+ acc {.area r}}}}]]
-$[# {row r} {' {.name r} [f "${.area r} m²"]}]
+$[# {row r} {' {.name r} f"{${.area r} m²}"}]
 # The house {#house}
 
 The house has ${strong {str {length rooms}}} rooms and $total m² in all (${link "plan" "plan.pdf"}).

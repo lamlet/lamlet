@@ -35,7 +35,7 @@ removed. Strings and numbers print as they are; other values print in Lamlet's w
 (`[1, 2]`, `{x: 1.0, y: 2.5}`, `#some(3)`). To print a value of your own type differently, write a function for it:
 
 ```text
-$[# {showPoint p} [f "(${.x p}, ${.y p})"]]
+$[# {showPoint p} f"{(${.x p}, ${.y p})}"]
 ```
 
 ## 3. `lamlet build`

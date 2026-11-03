@@ -19,8 +19,8 @@ pub enum Tok {
     LBracket,
     RBracket,
     Str(Lit),
-    /// `f"{...}"` or `latex"{...}"`: a raw template. Its `Lit` is the text between `f"{` and `}"`, unescaped.
-    Template(TemplateKind, Lit),
+    /// `f"{...}"`: a template. Its `Lit` is the text between `f"{` and `}"`, exactly as written.
+    Template(Lit),
     Int(i64),
     Float(f64),
     /// A possibly qualified identifier, split into components.
@@ -38,7 +38,7 @@ pub enum Tok {
 }
 
 /// A String literal: its raw source text (between the quotes), where that text starts, and its value after
-/// escape processing. Escape errors are deferred so raw forms such as `[latex "\frac"]` can use the text.
+/// escape processing. Escape errors are deferred until the literal is used as a value.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Lit {
     pub raw: String,
@@ -210,10 +210,9 @@ pub fn lex(file: u32, text: &str, base: usize) -> DResult<Vec<Token>> {
                 let end = crate::source::raw_template_end(text, body).map_err(|(msg, a, b, _)| {
                     crate::source::Diagnostic::new(crate::source::DiagKind::Syntax, msg, Some(sp(a, b)))
                 })?;
-                let kind = if c == 'f' { TemplateKind::Format } else { TemplateKind::Latex };
                 let raw = text[body..end - 2].to_string();
                 let lit = Lit { cooked: Ok(raw.clone()), raw, offset: base + body, mark: None };
-                toks.push(Token { tok: Tok::Template(kind, lit), span: sp(i, end) });
+                toks.push(Token { tok: Tok::Template(lit), span: sp(i, end) });
                 i = end;
             }
             _ if is_word_start(c) || is_symbol(c) => {
@@ -230,14 +229,6 @@ pub fn lex(file: u32, text: &str, base: usize) -> DResult<Vec<Token>> {
         }
         // Tokens other than delimiters must be followed by whitespace, a delimiter, or the end.
         if let Some(n) = text[i..].chars().next() {
-            if let Some(Token { tok: Tok::Str(l), .. }) = toks.last() {
-                if !n.is_whitespace() && !is_delim(n) && open_hole(&l.raw) {
-                    return syntax_err(
-                        "a `$` hole in a template cannot contain a String literal (its quote ends the template); bind the String first, or write a raw template f\"{...}\"",
-                        sp(start, i + n.len_utf8()),
-                    );
-                }
-            }
             let method = n == '.' && text[i + 1..].starts_with(|c: char| is_word_start(c) || is_symbol(c));
             if !n.is_whitespace() && !is_delim(n) && n != ';' && !method {
                 return syntax_err("expected whitespace or a delimiter after this token", sp(start, i + n.len_utf8()));
@@ -342,19 +333,6 @@ fn lex_number(text: &str, start: usize) -> Result<(Tok, usize), String> {
     }
 }
 
-/// Whether `raw` ends inside an unclosed `${`/`$[` hole (a String literal split a template).
-fn open_hole(raw: &str) -> bool {
-    match raw.rfind("${").into_iter().chain(raw.rfind("$[")).max() {
-        Some(at) => {
-            let rest = &raw[at + 1..];
-            let opens = rest.matches(['{', '[']).count();
-            let closes = rest.matches(['}', ']']).count();
-            opens > closes
-        }
-        None => false,
-    }
-}
-
 /// Index after the closing quote of the String starting at `start`. A backslash always skips the next
 /// character (the same rule the region scanner uses), even in raw forms.
 fn string_end(text: &str, start: usize) -> Option<usize> {
@@ -403,7 +381,7 @@ pub fn cook(raw: &str) -> Result<String, (String, usize, usize)> {
                 continue;
             }
             other => {
-                let hint = if other.is_ascii_alphabetic() { " (for LaTeX, use [latex \"...\"], where backslashes are literal)" } else { "" };
+                let hint = if other.is_ascii_alphabetic() { " (for LaTeX, write a template f\"{...}\", where backslashes are literal)" } else { "" };
                 return Err((format!("unknown escape `\\{}`{}", other, hint), i, i + 1 + other.len_utf8()));
             }
         }
@@ -575,16 +553,8 @@ pub enum Expr {
     Static(Box<Expr>, Span),
     /// `{!name operands...}`: operands stay unparsed until expansion.
     Macro(Vec<String>, Vec<Syntax>, Span),
-    /// `[f "..."]` or `[latex "..."]`: literal text and `$` holes.
-    Template(TemplateKind, Vec<Part>, Span),
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TemplateKind {
-    /// `[f "..."]`: a String; escapes are processed in the literal text; holes are formatted scalars.
-    Format,
-    /// `[latex "..."]`: a Latex value; text is raw (backslashes literal); String holes are LaTeX-escaped.
-    Latex,
+    /// `f"{...}"`: literal text and `$` holes, a String.
+    Template(Vec<Part>, Span),
 }
 
 #[derive(Clone, Debug)]
@@ -609,7 +579,7 @@ impl Expr {
             | Expr::Ascribe(_, _, s)
             | Expr::Static(_, s)
             | Expr::Macro(_, _, s)
-            | Expr::Template(_, _, s) => *s,
+            | Expr::Template(_, s) => *s,
         }
     }
 }
@@ -717,7 +687,7 @@ pub fn parse_expr(s: &Syntax) -> DResult<Expr> {
                 Ok(x) => Ok(Expr::Str(x.clone(), t.span)),
                 Err((m, a, b)) => syntax_err(m.clone(), Span::new(t.span.file, *a, *b)),
             },
-            Tok::Template(kind, l) => template(*kind, l, true, t.span.file, t.span),
+            Tok::Template(l) => template(l, t.span.file, t.span),
             Tok::Ident(parts) => name_expr(parts, t.span),
             Tok::Macro(p) => syntax_err(format!("a macro must be applied: write {{!{} ...}}", p.join("::")), t.span),
             Tok::Label(k, l) => Ok(Expr::Label(*k, base_name(l).to_string(), t.span)),
@@ -915,14 +885,6 @@ fn bracket(items: &[Syntax], span: Span, doc: Option<String>) -> DResult<Item> {
             Item::Decls(vec![Decl::NativeType { name: n, name_span: ns, type_id, span, doc }])
         }
         "Macro" => macro_decl(items, span, doc)?,
-        "f" | "latex" => {
-            arity(items, 2, &format!("`[{} \"...\"]`", name), span)?;
-            let kind = if name == "f" { TemplateKind::Format } else { TemplateKind::Latex };
-            match &items[1] {
-                Syntax::Atom(Token { tok: Tok::Str(l), span: lspan }) => Item::Expr(template(kind, l, false, lspan.file, span)?),
-                other => return syntax_err(format!("`[{} ...]` needs a String literal template", name), other.span()),
-            }
-        }
         _ => return syntax_err(format!("unknown bracket form `[{} ...]`", name), head.span()),
     };
     Ok(item)
@@ -1064,11 +1026,11 @@ pub fn parse_region(file: u32, kind: RegionKind, text: &str, base: usize) -> DRe
 }
 
 // ---------------------------------------------------------------------------------------------------------
-// String templates: [f "..."] and [latex "..."], and the raw forms f"{...}" and latex"{...}"
+// Templates: f"{...}"
 
 enum RawPart {
-    /// Literal raw text and its absolute start offset.
-    Text(String, usize),
+    /// Literal text.
+    Text(String),
     Hole(Expr),
 }
 
@@ -1076,28 +1038,20 @@ enum RawPart {
 /// `$$` for a literal dollar; any other `$` is literal. A template starting with a newline has that newline,
 /// the indentation shared by its lines, and a final whitespace-only line removed.
 ///
-/// A `raw` template (`f"{...}"`) has no escapes: its text is exactly as written, and its holes may contain
-/// String literals, since a quote does not end it.
-fn template(kind: TemplateKind, lit: &Lit, raw_form: bool, file: u32, span: Span) -> DResult<Expr> {
+/// The text has no escapes: it is exactly as written, and holes may contain String literals, since a quote
+/// does not end a template.
+fn template(lit: &Lit, file: u32, span: Span) -> DResult<Expr> {
     let raw = lit.raw.as_str();
     let base = lit.offset;
     let mut parts: Vec<RawPart> = Vec::new();
     let mut text = String::new();
-    let mut text_start = base;
     let mut i = 0;
-    let push_text = |parts: &mut Vec<RawPart>, text: &mut String, start: usize| {
+    let push_text = |parts: &mut Vec<RawPart>, text: &mut String| {
         if !text.is_empty() {
-            parts.push(RawPart::Text(std::mem::take(text), start));
+            parts.push(RawPart::Text(std::mem::take(text)));
         }
     };
     while let Some(c) = raw[i..].chars().next() {
-        if c == '\\' && kind == TemplateKind::Format && !raw_form {
-            // Keep escapes intact (so `\"` and `\\` reach `cook`).
-            let n = raw[i + 1..].chars().next().map_or(0, |n| n.len_utf8());
-            text.push_str(&raw[i..i + 1 + n]);
-            i += 1 + n;
-            continue;
-        }
         if c != '$' {
             text.push(c);
             i += c.len_utf8();
@@ -1110,20 +1064,14 @@ fn template(kind: TemplateKind, lit: &Lit, raw_form: bool, file: u32, span: Span
                 i += 2;
             }
             Some('{') | Some('[') => {
-                let close = if raw_form {
-                    crate::source::code_end(raw, i + 1).ok()
-                } else {
-                    hole_end(raw, i + 1)
-                };
-                let close = close.ok_or_else(|| {
-                    let why = if raw_form { "" } else { " (holes cannot contain String literals; a raw template f\"{...}\" can)" };
+                let close = crate::source::code_end(raw, i + 1).ok().ok_or_else(|| {
                     crate::source::Diagnostic::new(
                         crate::source::DiagKind::Syntax,
-                        format!("unterminated `$` hole in a template{}", why),
+                        "unterminated `$` hole in a template",
                         Some(Span::new(file, base + i, base + raw.len())),
                     )
                 })?;
-                push_text(&mut parts, &mut text, text_start);
+                push_text(&mut parts, &mut text);
                 let code = &raw[i + 1..close];
                 let toks = lex(file, code, base + i + 1)?;
                 let hole_span = Span::new(file, base + i, base + close);
@@ -1137,10 +1085,9 @@ fn template(kind: TemplateKind, lit: &Lit, raw_form: bool, file: u32, span: Span
                 }
                 parts.push(RawPart::Hole(parse_expr(&tree)?));
                 i = close;
-                text_start = base + i;
             }
             Some(n) if crate::source::is_word_start(n) => {
-                push_text(&mut parts, &mut text, text_start);
+                push_text(&mut parts, &mut text);
                 let end = crate::source::scan_qualified_word(raw, i + 1);
                 let mut names: Vec<String> = raw[i + 1..end].split("::").map(String::from).collect();
                 if let Some(m) = lit.mark {
@@ -1148,7 +1095,6 @@ fn template(kind: TemplateKind, lit: &Lit, raw_form: bool, file: u32, span: Span
                 }
                 parts.push(RawPart::Hole(name_expr(&names, Span::new(file, base + i, base + end))?));
                 i = end;
-                text_start = base + i;
             }
             _ => {
                 text.push('$');
@@ -1156,59 +1102,20 @@ fn template(kind: TemplateKind, lit: &Lit, raw_form: bool, file: u32, span: Span
             }
         }
     }
-    push_text(&mut parts, &mut text, text_start);
+    push_text(&mut parts, &mut text);
     dedent(raw, &mut parts);
     let mut out = Vec::new();
     for p in parts {
         match p {
             RawPart::Hole(e) => out.push(Part::Hole(e)),
-            RawPart::Text(t, start) => {
-                let t = match kind {
-                    TemplateKind::Latex => t,
-                    TemplateKind::Format if raw_form => t,
-                    TemplateKind::Format => cook(&t).map_err(|(m, a, b)| {
-                        crate::source::Diagnostic::new(crate::source::DiagKind::Syntax, m, Some(Span::new(file, start + a, start + b)))
-                    })?,
-                };
+            RawPart::Text(t) => {
                 if !t.is_empty() {
                     out.push(Part::Lit(t));
                 }
             }
         }
     }
-    Ok(Expr::Template(kind, out, span))
-}
-
-/// End (exclusive) of a balanced `{...}`/`[...]` hole whose opener is at `open`.
-fn hole_end(raw: &str, open: usize) -> Option<usize> {
-    let b = raw.as_bytes();
-    let mut depth = 0usize;
-    let mut k = open;
-    while k < b.len() {
-        match b[k] {
-            b';' if b.get(k + 1) == Some(&b';') => {
-                while k < b.len() && b[k] != b'\n' {
-                    k += 1;
-                }
-                continue;
-            }
-            b';' if matches!(b.get(k + 1), Some(b'{') | Some(b'[')) => {
-                k = crate::source::raw_form_end(raw, k + 1).ok()?;
-                continue;
-            }
-            b'{' | b'[' => depth += 1,
-            b'}' | b']' => {
-                depth -= 1;
-                if depth == 0 {
-                    return Some(k + 1);
-                }
-            }
-            b'"' => return None,
-            _ => {}
-        }
-        k += 1;
-    }
-    None
+    Ok(Expr::Template(out, span))
 }
 
 /// Strip common indentation from a template that starts with a newline (see `template`).
@@ -1232,7 +1139,7 @@ fn dedent(raw: &str, parts: &mut [RawPart]) {
     for (pi, p) in parts.iter_mut().enumerate() {
         match p {
             RawPart::Hole(_) => at_line_start = false,
-            RawPart::Text(t, _) => {
+            RawPart::Text(t) => {
                 let mut out = String::new();
                 let mut chars = t.chars().peekable();
                 if first {
@@ -1283,7 +1190,7 @@ fn atom_eq(a: &Tok, b: &Tok) -> bool {
         (Tok::Int(x), Tok::Int(y)) => x == y,
         (Tok::Float(x), Tok::Float(y)) => x == y,
         (Tok::Str(x), Tok::Str(y)) => x.value().is_some() && x.value() == y.value(),
-        (Tok::Template(k1, x), Tok::Template(k2, y)) => k1 == k2 && x.raw == y.raw,
+        (Tok::Template(x), Tok::Template(y)) => x.raw == y.raw,
         (Tok::Ident(x), Tok::Ident(y)) => x.len() == 1 && y.len() == 1 && base_name(&x[0]) == base_name(&y[0]),
         (Tok::Label(k1, x), Tok::Label(k2, y)) => k1 == k2 && x == y,
         _ => false,
@@ -1385,9 +1292,7 @@ pub fn instantiate(t: &Syntax, b: &Bindings, m: u32) -> Result<Syntax, String> {
                 Ok(Syntax::Atom(Token { tok: Tok::Macro(parts), span: tok.span }))
             }
             Tok::Str(l) if l.mark.is_none() => Ok(Syntax::Atom(Token { tok: Tok::Str(Lit { mark: Some(m), ..l.clone() }), span: tok.span })),
-            Tok::Template(k, l) if l.mark.is_none() => {
-                Ok(Syntax::Atom(Token { tok: Tok::Template(*k, Lit { mark: Some(m), ..l.clone() }), span: tok.span }))
-            }
+            Tok::Template(l) if l.mark.is_none() => Ok(Syntax::Atom(Token { tok: Tok::Template(Lit { mark: Some(m), ..l.clone() }), span: tok.span })),
             _ => Ok(t.clone()),
         },
         Syntax::Brace(..) if splice_group(t).is_some() => Err("a splice group `{... }` must be an element of a list".into()),

@@ -1,21 +1,22 @@
-[latex "..."] formulas: raw backslashes, holes, escaping of inserted Strings, and the Latex type.
+Formulas: a Latex is std's record {latex: String}, made by `latex` from LaTeX source, usually a template, whose
+backslashes are text. `latexSource` reads it back, and `latexEscape` makes text safe to typeset literally.
 $[Import* std]
-$[latex "\frac{1}{2} + \nabla"]
+${latex f"{\frac{1}{2} + \nabla}"}
 expect: {latex: "\\frac{1}{2} + \\nabla"}
-$[# a [latex "x^2"]]
-$[latex "\sqrt{$a + ${+ 1 2}}"]
+$[# a {latex "x^2"}]
+${latex f"{\sqrt{${latexSource a} + ${+ 1 2}}}"}
 expect: {latex: "\\sqrt{x^2 + 3}"}
 $[# label "a_b {c} 50% \\ ^ ~"]
-${latexSource [latex "$label"]}
+${latexEscape label}
 expect: "a\\_b \\{c\\} 50\\% \\text{\\textbackslash} \\text{\\textasciicircum} \\text{\\textasciitilde}"
-${latexSource [latex "$$\alpha"]}
+${latexSource {latex f"{$$\alpha}"}}
 expect: "$\\alpha"
-${= [latex "x"] [latex "x"]} ${.latex {: [latex "x"] Latex}}
+${= {latex "x"} {latex "x"}} ${.latex {: {latex "x"} Latex}}
 expect: true
 expect: "x"
-${latexSource [latex "
+${latexSource {latex f"{
     \begin{aligned}
-      y &= $a
+      y &= ${latexSource a}
     \end{aligned}
-    "]}
+    }"}}
 expect: "\\begin{aligned}\n  y &= x^2\n\\end{aligned}\n"

@@ -226,7 +226,7 @@ fn conversions_cover_options_pairs_lists_and_records() {
     let doc = e
         .check(SourceFile::new(
             "v.lam",
-            "$[Import* std]$[# firstOr {^ {xs d} {caseList xs {^ {} {pair d none}} {^ {h t} {pair h {some {length t}}}}}}]$[# label {^ {r} [f \"${.name r}#${.id r}\"]}]",
+            "$[Import* std]$[# firstOr {^ {xs d} {caseList xs {^ {} {pair d none}} {^ {h t} {pair h {some {length t}}}}}}]$[# label {^ {r} f\"{${.name r}#${.id r}}\"}]",
         ))
         .unwrap();
     let mut inst = e.instance(&doc).unwrap();
