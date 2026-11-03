@@ -1,9 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="240" viewBox="0 0 1600 240" role="img" aria-labelledby="lamlet-title lamlet-desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="400" viewBox="0 0 1600 400" role="img" aria-labelledby="lamlet-title lamlet-desc">
   <title id="lamlet-title">Lamlet</title>
   <desc id="lamlet-desc">A flat, bold dollar sign and upright lambda in squared curly braces, ${λ}, with chamfered corners except on the lambda, in black on light gray, beside the Lamlet wordmark in muted gray.</desc>
   <!-- Wordmark: DejaVu Sans Bold outlines; see DejaVu-LICENSE.txt. No external font or image dependencies. -->
-  <rect width="1600" height="240" fill="#E4E4E4"/>
-  <g transform="translate(800 120) scale(1.4162) translate(-315.559 -128)" fill="none" stroke="#000" stroke-linecap="butt" stroke-linejoin="bevel">
+  <rect width="1600" height="400" fill="#E4E4E4"/>
+  <g transform="translate(800 200) scale(1.4162) translate(-315.559 -128)" fill="none" stroke="#000" stroke-linecap="butt" stroke-linejoin="bevel">
     <clipPath id="lamlet-cut"><rect x="0" y="84" width="256" height="88"/></clipPath>
     <g id="lamlet-symbol" stroke-width="20">
       <path id="dollar" stroke-width="16" d="M14 100H-34V128H6V156H-42M-14 84V92M-14 164V172"/>

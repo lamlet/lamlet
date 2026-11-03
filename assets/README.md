@@ -1,9 +1,9 @@
 # Lamlet logo
 
-- [lamlet.svg](lamlet.svg): primary 1600×240 banner with `${λ} Lamlet` centered. The wordmark is muted
+- [lamlet.svg](lamlet.svg): primary 1600×400 banner with `${λ} Lamlet` centered. The wordmark is muted
   gray (`#8A8A8A`) so the black `${λ}` expression stands out. The README shows it at full width.
 - [lamlet-mark.svg](lamlet-mark.svg): square symbol for small placements.
-- [lamlet.png](lamlet.png) (3200×480) and [lamlet-mark.png](lamlet-mark.png) (512×512): 2× raster copies
+- [lamlet.png](lamlet.png) (3200×800) and [lamlet-mark.png](lamlet-mark.png) (512×512): 2× raster copies
   of the SVGs, rendered with ImageMagick, for places that do not accept SVG.
 - `-dark` variants of all four files ([lamlet-dark.svg](lamlet-dark.svg),
   [lamlet-mark-dark.svg](lamlet-mark-dark.svg), and their PNGs) invert the colors: white `${λ}`, `#757575`
