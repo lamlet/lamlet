@@ -137,3 +137,12 @@ Each entry: name, then its doc (which starts with its type when it has one). `_n
 - `!assert` — {!assert a b}: checks during preparation that a equals b and returns a. Both must be statically available.
 - `hash` — Eq A: Fn([A], Int). A stable hash: equal values hash equally on every platform and in every run.
 - `time` — Fn([], Int), Runtime. The Unix time (seconds) that the host supplies for this evaluation; constant within it.
+
+## 10. Testing
+
+- `Check` — Type. The result of one check: `#pass` or `#fail` with a message.
+- `expectEqual` — Eq A: Fn([A, A], Check). Passes when got equals want; otherwise fails, showing both.
+- `expectTrue` — Fn([Bool, String], Check). Passes when b is true; otherwise fails with the description `what`.
+- `!test` — {!test name check...}: a test named `name` whose body is its checks, run (in order) only when the test runs.
+- `!testFails` — {!testFails name message body}: a test that passes when evaluating body fails with an error whose message contains `message`, and fails when body returns.
+- `!tests` — {!tests t...}: the list of tests t, built during preparation, so that a host can find and run them. A test may use only static names.

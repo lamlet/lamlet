@@ -15,6 +15,7 @@ cargo build --release
 ./target/release/lamlet build file.lam -o file.md   # compile to Markdown, HTML, or JSON (documents.md)
 ./target/release/lamlet eval file.lam     # check, then evaluate; JSON results on stdout
 ./target/release/lamlet check file.lam    # types and stages only
+./target/release/lamlet test dir/         # run the tests of every .lam file under dir (section 10)
 ```
 
 A Lamlet file is a **document**. Only `$`-prefixed regions are code; everything else is text, printed as
@@ -346,7 +347,45 @@ Every module can also see `K`, the built-in primitives: `K::add`, `K::caseList`,
 ordinary function with an ordinary type, so you can alias it, wrap it, or pass it around freely. Everything in
 `crates/lamlet/std/std.lam` is plain Lamlet over `K`, and is worth reading as a tour of idiomatic code.
 
-## 10. Common pitfalls
+## 10. Testing
+
+A document's tests are a list it binds to `_tests` (private, so a library can keep its tests inline without
+exporting them). `!test` takes a name and checks; `!testFails` takes a name, the text the error must contain,
+and an expression that must fail:
+
+```text
+$[# {sq x} {* x x}]
+$[# _tests {!tests
+  {!test "squares" {expectEqual {sq 3} 9} {expectEqual {sq -2} 4}}
+  {!test "negative" {expectTrue {> {sq -3} 0} "positive"} {expectEqual {sq -3} -9}}
+  {!testFails "overflow" "overflow" {sq 9223372036854775807}}
+}]
+```
+
+`lamlet test FILE-OR-DIR...` runs each test on its own, so a failed check, a runtime error, or a runaway loop
+(the instruction budget, `--max-instructions`) fails that test and the rest still run:
+
+```text
+math.lam
+  ok     squares
+  FAIL   negative
+         check 2 of 2: expected -9, got 9
+  ok     overflow (failed as expected)
+1 file, 3 tests: 2 passed, 1 failed, 0 errored
+```
+
+- **Checks are values.** `expectEqual` and `expectTrue` return a `Check` (`#pass` or `#fail "message"`) instead
+  of aborting, so one test reports every check that failed.
+- **Tests use only static names.** `!tests` builds the list at compile time (it is `[% {' ...}]`); the bodies run
+  only under `lamlet test`. A test that names a runtime binding is a stage error.
+- **Normal runs ignore tests**, but still check them: a type error in a test fails `lamlet FILE` too.
+- **Whole-document expectations.** Prose lines `expect: VALUE` (one per expression region, in order) and
+  `expect-error: KIND: TEXT` are checked too. Only `expect-error` can test that a document fails to check, since
+  checking stops at the first error. This repository's `tests/fixtures/*.lam` are written this way.
+- **Compile-time invariants** that must hold for the document to build at all stay `{!assert a b}`.
+- `--filter TEXT` runs the tests whose name contains TEXT; `--json` prints the report as JSON.
+
+## 11. Common pitfalls
 
 | You wrote | Problem | Write instead |
 |---|---|---|
@@ -363,7 +402,7 @@ ordinary function with an ordinary type, so you can alias it, wrap it, or pass i
 | `{x .f a}` | The space makes `.f` a getter | `{x.f a}` |
 | `{!case t ...}` on a `[Type]` value | A recursive type is not its structure | `{!case {unrollT t} ...}` |
 
-## 11. Where to go next
+## 12. Where to go next
 
 - [spec.md](spec.md): the precise semantics, the primitive list, and the staging rules
 - `crates/lamlet/std/std.lam`: the whole standard library, in Lamlet

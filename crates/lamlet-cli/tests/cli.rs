@@ -227,3 +227,37 @@ fn unknown_commands_run_extensions_from_the_path() {
     assert!(String::from_utf8_lossy(&out.stderr).contains("reading nothing-here"));
     std::fs::remove_dir_all(&dir).ok();
 }
+
+#[test]
+fn test_command_reports_each_test() {
+    let dir = std::env::temp_dir().join(format!("lamlet-cli-test-{}", std::process::id()));
+    std::fs::create_dir_all(dir.join("sub")).unwrap();
+    std::fs::write(
+        dir.join("math.lam"),
+        "$[Import* std]\n$[# _tests {!tests\n  {!test \"adds\" {expectEqual {+ 1 2} 3}}\n  {!test \"wrong\" {expectEqual {+ 1 2} 4}}\n}]\n",
+    )
+    .unwrap();
+    std::fs::write(dir.join("sub/golden.lam"), "$[Import* std]\n${+ 1 2}\nexpect: 3\n").unwrap();
+    let path = dir.to_str().unwrap();
+
+    let (code, j, _) = lamlet(&["test", path, "--json"], None);
+    assert_eq!(code, 1);
+    let files = j["files"].as_array().unwrap();
+    assert_eq!(files.len(), 2);
+    let math = files.iter().find(|f| f["file"].as_str().unwrap().ends_with("math.lam")).unwrap();
+    let outcomes: Vec<&str> = math["tests"].as_array().unwrap().iter().map(|t| t["outcome"].as_str().unwrap()).collect();
+    assert_eq!(outcomes, ["passed", "failed"]);
+    assert_eq!(math["tests"][1]["failures"][0]["message"], "expected 4, got 3");
+    let golden = files.iter().find(|f| f["file"].as_str().unwrap().ends_with("golden.lam")).unwrap();
+    assert_eq!(golden["ok"], true);
+
+    let (code, j, _) = lamlet(&["test", path, "--filter", "adds", "--json"], None);
+    assert_eq!(code, 0, "{}", j);
+
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_lamlet"));
+    let out = cmd.args(["test", path]).output().unwrap();
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(text.contains("  FAIL   wrong\n         check 1 of 1: expected 4, got 3"), "{}", text);
+    assert!(text.ends_with("2 files, 2 tests: 1 passed, 1 failed, 0 errored\n"), "{}", text);
+    std::fs::remove_dir_all(&dir).unwrap();
+}

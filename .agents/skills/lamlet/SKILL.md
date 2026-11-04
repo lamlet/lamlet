@@ -382,12 +382,33 @@ Don't emulate these by guessing at syntax:
 3. On an error, look up its kind and message in `references/errors.md`, and read the diagnostic's notes.
 4. To check the type of something, put it alone in a `${...}` region and run `lamlet eval`: the JSON shows each
    region's `type`. Alternatively, ascribe the type you expect with `{: e T}`.
-5. For a library-level change, also run `cargo test` (unit, semantic, fixture, CLI, and adapter suites, in
+5. To test Lamlet code, bind `_tests` with `{!tests {!test "name" {expectEqual got want} ...} ...}` and run
+   `./target/release/lamlet test FILE-OR-DIR` (§8, *Writing tests*).
+6. For a library-level change, also run `cargo test` (unit, semantic, fixture, CLI, and adapter suites, in
    debug and release).
+
+### Writing tests
+
+```text
+$[# _tests {!tests
+  {!test "squares" {expectEqual {sq 3} 9} {expectTrue {> {sq 2} 0} "positive"}}
+  {!testFails "overflow" "overflow" {* 9223372036854775807 2}}
+}]
+```
+
+- `lamlet test PATH...` runs each test as its own call: a failed check, runtime error, or exhausted budget fails
+  that test only. `--filter TEXT`, `--json`, `--max-instructions N`.
+- Checks are values (`Check` = `<pass: Unit, fail: String>`), so a test lists several. `!testFails name text e`
+  passes when `e` errors with a message containing `text`.
+- `!tests` is `[% {' ...}]`: tests may use only static names (a runtime binding is a stage error). Keep the
+  binding `_tests`, so it is not exported; another name needs `--tests NAME`.
+- A document that must fail to *check* is tested with an `expect-error:` line instead (below), and a
+  build-time invariant with `!assert`.
 
 ### Tests in this repository
 
-A fixture is a document in `tests/fixtures/*.lam`. Its prose lines `expect: <display>` (one per expression
+A fixture is a document in `tests/fixtures/*.lam` (`lamlet test tests/fixtures` runs them too, except the few
+that need the Rust harness's `fx-*` packages or no `std.time` input). Its prose lines `expect: <display>` (one per expression
 region, in order) or `expect-error: <kind>: <text>` state the expected outcome, and `input: KEY=INT` supplies a
 host input. Adding a file adds a test. Semantic rules have Rust tests in `crates/lamlet/tests/semantics.rs`.
 

@@ -331,6 +331,29 @@ adds syntax for what `codeBlock` with a template already does.
 computed values inside fences must move them to `codeBlock`. Inline code spans still hold regions, since a
 single backtick is too common in prose to make it verbatim.
 
+## D17. Tests are data, isolated by the host
+
+**Decision.** A document's tests are a static list it binds to `_tests`, built by std's `!tests`, `!test`, and
+`!testFails`: records holding a name and a thunk. A check (`expectEqual`, `expectTrue`) returns a `Check` value,
+`#pass` or `#fail "message"`, instead of aborting. The host runs each thunk as its own call
+(`embed::testing::run_test`, `lamlet test`), so an error or an exhausted budget fails one test.
+
+**Why.** Errors abort the whole evaluation, and that stays: a `catch` would make every evaluation's outcome
+depend on handlers, and it would let code observe failures that budgets and cancellation are meant to end. The
+host already isolates calls (`Instance::call` reports a failure and the instance stays usable), so isolating
+tests needs no language change. Tests are found by one binding, not by a naming pattern over all bindings, in
+keeping with "one meaning per name". The binding is private so that two libraries with inline tests can both be
+imported with `Import*`. Checks are values so that one test reports every failed check, not only the first.
+
+**Alternatives.** A `catch` primitive (rejected above). A naming convention (`testFoo`): the runner would scan
+names, and the tests would be exported. Assertions only (`!assert`): they are compile-time, and the first
+failure stops the document. Procedural test discovery in the checker: a language change for a tooling need.
+
+**Cost.** Tests may use only static names, since `!tests` builds the list during preparation. A check does not
+know its source position (a macro cannot see one), so a failure is reported by its position in the test and the
+values it compared; a runtime error still carries its location. That a document fails to check can be tested
+only per document, by an `expect-error:` line, since checking stops at the first error.
+
 ## Known limitations
 
 - No mutual recursion (of functions or of recursive types), non-regular recursive types, polymorphic computed

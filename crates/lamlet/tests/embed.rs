@@ -432,3 +432,61 @@ fn recursive_type_data_round_trips() {
     let bad = TypeData::Recursive { name: "B".into(), params: vec![], body: Box::new(TypeData::Bound(1)), args: vec![] };
     assert!(bad.to_desc().is_err());
 }
+
+#[test]
+fn testing_runs_each_test_on_its_own() {
+    use lamlet::embed::testing::*;
+    let mut engine = Engine::new();
+    engine.limits_mut().max_instructions = 100_000;
+    let src = r#"$[Import* std]
+$[# {loop n} {loop n}]
+$[# _tests {!tests
+  {!test "passes" {expectEqual {+ 1 2} 3} {expectTrue true "true"}}
+  {!test "fails" {expectEqual 1 1} {expectEqual {+ 1 2} 4}}
+  {!test "errors" {expectEqual {nth {' 1} 3} 1}}
+  {!test "runs away" {expectEqual {loop 0} 0}}
+  {!testFails "fails as expected" "overflow" {* 9223372036854775807 2}}
+  {!testFails "wrong error" "division" {* 9223372036854775807 2}}
+  {!testFails "returns" "anything" 1}
+  {!test "still runs" {expectEqual 1 1}}
+}]"#;
+    let doc = engine.check(SourceFile::new("t.lam", src)).unwrap();
+    let mut inst = engine.instance(&doc).unwrap();
+    let reports = run_tests(&doc, &mut inst, DEFAULT_TESTS).unwrap();
+    let names: Vec<&str> = reports.iter().map(|r| r.name.as_str()).collect();
+    assert_eq!(names, ["passes", "fails", "errors", "runs away", "fails as expected", "wrong error", "returns", "still runs"]);
+    assert!(matches!(reports[0].outcome, Outcome::Passed { checks: 2 }));
+    match &reports[1].outcome {
+        Outcome::Failed { checks: 2, failures } => assert_eq!(failures, &[(2, "expected 4, got 3".to_string())]),
+        o => panic!("{:?}", o),
+    }
+    assert!(matches!(&reports[2].outcome, Outcome::Errored(e) if e.render().contains("index out of range")));
+    assert!(matches!(&reports[3].outcome, Outcome::Errored(e) if e.diagnostics()[0].kind == DiagKind::Limit));
+    assert!(matches!(&reports[4].outcome, Outcome::FailedAsExpected { message } if message.contains("overflow")));
+    assert!(matches!(&reports[5].outcome, Outcome::ExpectedError { got: Some(_), .. }));
+    assert!(matches!(&reports[6].outcome, Outcome::ExpectedError { got: None, .. }));
+    assert!(reports[7].outcome.passed());
+}
+
+#[test]
+fn testing_rejects_a_binding_that_is_not_tests() {
+    use lamlet::embed::testing::*;
+    let engine = Engine::new();
+    let doc = engine.check(SourceFile::new("t.lam", "$[Import* std]$[# tests {' 1 2}]$[# n {+ 1 2}]")).unwrap();
+    assert!(tests(&doc, "tests").unwrap_err().render().contains("must be a list of tests"));
+    assert!(tests(&doc, "n").unwrap_err().render().contains("no static binding `n`"));
+}
+
+#[test]
+fn testing_checks_expect_lines() {
+    use lamlet::embed::testing::*;
+    let engine = Engine::new();
+    let ok = "$[Import* std]${+ 1 2}\nexpect: 3\n";
+    assert!(check_expectations(&engine, SourceFile::new("a.lam", ok)).is_empty());
+    let wrong = "$[Import* std]${+ 1 2}\nexpect: 4\n";
+    assert_eq!(check_expectations(&engine, SourceFile::new("b.lam", wrong)), ["line 2: expected 4, got 3"]);
+    let error = "$[Import* std]${+ 1 \"a\"}\nexpect-error: type: String\n";
+    assert!(check_expectations(&engine, SourceFile::new("c.lam", error)).is_empty());
+    let both = "expect: 1\nexpect-error: type: x\n";
+    assert_eq!(Expectations::parse(both).unwrap_err(), "a document cannot combine expect and expect-error lines");
+}

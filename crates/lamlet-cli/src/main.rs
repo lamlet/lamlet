@@ -13,6 +13,8 @@ use serde_json::{json, Map, Value as Json};
 use std::io::Read;
 use std::rc::Rc;
 
+mod test;
+
 const PROTOCOL_VERSION: u64 = 1;
 
 const USAGE: &str = "usage:
@@ -24,6 +26,8 @@ const USAGE: &str = "usage:
   lamlet check   FILE [--package NAME=PATH]... [--require-linked]
   lamlet eval    FILE [--package NAME=PATH]... [--input KEY=JSON]... [--max-instructions N]
   lamlet call    FILE FUNCTION [JSON_ARG]... [--package NAME=PATH]... [--input KEY=JSON]...
+  lamlet test    PATH... [--filter TEXT] [--tests NAME] [--json] [--package NAME=PATH]... [--input KEY=JSON]...
+                 [--max-instructions N]
   lamlet batch   < request.json
 
 `lamlet FILE` runs the document from top to bottom and prints it: text as written, each `${...}` or `$name`
@@ -43,6 +47,12 @@ The extension gets the `lamlet` program's path in the LAMLET environment variabl
 `call` evaluates a statically available top-level function of FILE with JSON arguments, converted using the
 function's parameter types (numbers, strings, booleans, null for Unit, arrays for lists, objects for records).
 
+`test` runs every `.lam` file a PATH names (a directory: every `.lam` file under it). A file's tests are the
+static list it binds to `_tests` (std's `{!tests {!test NAME CHECK...} ...}`); each runs on its own, so a failed
+check, runtime error, or exhausted budget fails that test only. --filter runs the tests whose name contains
+TEXT. A file's `expect: VALUE` and `expect-error: KIND: TEXT` lines are checked too. It prints a report (JSON
+with --json) and exits with 1 when anything failed.
+
 `std.time` returns one Unix timestamp snapshot per invocation; override it with --input std.time=SECONDS.
 Packages given with --package export every top-level definition not starting with `_`.
 `std` is always available. Output is versioned JSON on stdout; diagnostics are also rendered on stderr.";
@@ -61,6 +71,8 @@ struct Request {
     /// Unix timestamp snapshot for `std.time`, read once per invocation.
     time: i64,
     build: Build,
+    /// Options of `test`.
+    test: test::TestOptions,
 }
 
 /// Options of `build`.
@@ -85,6 +97,14 @@ fn main() {
             std::process::exit(2);
         }
     };
+    if req.command == "test" {
+        let mut engine = lamlet::embed::Engine::new();
+        engine.set_resolver(resolver(&req));
+        if let Some(n) = req.max_instructions {
+            engine.limits_mut().max_instructions = n;
+        }
+        std::process::exit(test::run(&engine, &req.test, &req.inputs, req.time));
+    }
     if req.command == "run" || req.command == "build" {
         std::process::exit(build(&req));
     }
@@ -93,7 +113,7 @@ fn main() {
     std::process::exit(if ok { 0 } else { 1 });
 }
 
-const COMMANDS: &[&str] = &["run", "build", "check", "eval", "call", "batch"];
+const COMMANDS: &[&str] = &["run", "build", "check", "eval", "call", "test", "batch"];
 
 /// `lamlet NAME ARGS...` for an extension: when NAME is not a command or an existing file, run `lamlet-NAME ARGS...`
 /// (the system finds it on the PATH). On Unix it replaces this process; elsewhere it runs and returns its exit
@@ -143,11 +163,11 @@ fn parse_args(args: &[String]) -> Result<Request, String> {
         std::io::stdin().read_to_string(&mut text).map_err(|e| format!("reading stdin: {}", e))?;
         return parse_batch(&text);
     }
-    if !matches!(command.as_str(), "run" | "build" | "check" | "eval" | "call") {
+    if !matches!(command.as_str(), "run" | "build" | "check" | "eval" | "call" | "test") {
         return Err(format!("unknown command `{}`", command));
     }
     let mut positional: Vec<String> = Vec::new();
-    let mut req = Request { command, documents: vec![], packages: vec![], inputs: vec![], require_linked: false, max_instructions: None, time: now(), build: Build::default() };
+    let mut req = Request { command, documents: vec![], packages: vec![], inputs: vec![], require_linked: false, max_instructions: None, time: now(), build: Build::default(), test: test::TestOptions::default() };
     let mut i = 1;
     while i < args.len() {
         let a = &args[i];
@@ -174,11 +194,21 @@ fn parse_args(args: &[String]) -> Result<Request, String> {
             "--prose" => req.build.prose = Some(value()?),
             "--standalone" => req.build.standalone = true,
             "--prepared" => req.build.prepared = true,
+            "--filter" => req.test.filter = Some(value()?),
+            "--tests" => req.test.binding = value()?,
+            "--json" => req.test.json = true,
             "--max-instructions" => req.max_instructions = Some(value()?.parse().map_err(|_| "--max-instructions expects an integer")?),
             arg if !arg.starts_with("--") => positional.push(arg.to_string()),
             other => return Err(format!("unknown option `{}`", other)),
         }
         i += 1;
+    }
+    if req.command == "test" {
+        if positional.is_empty() {
+            return Err("`test` needs a file or directory".into());
+        }
+        req.test.paths = positional;
+        return Ok(req);
     }
     let mut positional = positional.into_iter();
     let path = positional.next().ok_or("no input file")?;
@@ -252,6 +282,7 @@ fn parse_batch(text: &str) -> Result<Request, String> {
         max_instructions: j.get("max_instructions").and_then(Json::as_u64),
         time: now(),
         build: Build::default(),
+        test: test::TestOptions::default(),
     })
 }
 

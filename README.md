@@ -50,6 +50,7 @@ cargo build --release
 ./target/release/lamlet eval examples/hello.lam      # JSON results on stdout
 ./target/release/lamlet build examples/hello.lam --to ir --prepared   # the IR before evaluation: static values, runtime holes
 ./target/release/lamlet check examples/hello.lam     # types and stages without running runtime code
+./target/release/lamlet test tests/                  # run documents' tests and expect: lines (docs/quick-start.md §10)
 cargo test                                           # unit, semantic, fixture, and CLI tests
 ```
 

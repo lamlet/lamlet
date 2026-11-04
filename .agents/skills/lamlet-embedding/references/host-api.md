@@ -9,6 +9,7 @@ cargo build --release
 ./target/release/lamlet FILE.lam                       # the document, each region's value filled in
 ./target/release/lamlet build FILE.lam --to ir --prepared   # the IR before evaluation: static values, runtime holes
 ./target/release/lamlet call FILE.lam area 3 4         # call a static top-level function with JSON arguments
+./target/release/lamlet test PATH...                   # run each file's `_tests` and expect: lines; exit 1 on failure
 ./target/release/lamlet batch REQUEST.json             # several documents/packages in one request
 #   options: --package NAME=PATH   --input KEY=JSON   --require-linked   --max-instructions N
 ```

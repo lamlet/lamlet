@@ -4,7 +4,27 @@ All notable changes to this project are listed here. Versions follow [Semantic V
 while the version is `0.x`, a minor release may break the API. The language version (`LANGUAGE_VERSION`) and
 bytecode version (`BYTECODE_VERSION`) are tracked separately from the crate version.
 
-## Unreleased
+## 0.4.1 (2026-11-03)
+
+Tests: a document binds `_tests` with std's `!tests`, and `lamlet test` runs each test on its own. Code fences
+are verbatim prose. A document that imports `std` with `Import*` and defines one of std's new names itself
+(`Check`, `expectEqual`, `expectTrue`, `!test`, `!testFails`, `!tests`) must rename it or import std otherwise.
+
+### Added
+
+- std's testing section: `{!tests {!test NAME CHECK...} {!testFails NAME TEXT EXPR} ...}` builds a static list
+  of tests during preparation, and running a test is calling its body. Checks are values: `expectEqual`,
+  `Eq A: Fn([A, A], Check)`, and `expectTrue`, `Fn([Bool, String], Check)`, return a `Check`
+  (`<pass: Unit, fail: String>`), so one test reports every check that failed. `!testFails` passes when its
+  expression fails with an error containing TEXT. Tests may use only static names. Rationale D17.
+- `lamlet test PATH... [--filter TEXT] [--tests NAME] [--json]`: for each `.lam` file (a directory: every one
+  under it), runs the tests bound to `_tests`, each as its own call, so a failed check, a runtime error, or an
+  exhausted instruction budget fails that test only, and checks the file's `expect:`/`expect-error:` lines. A
+  file that does not check is one failure, and the run goes on. Exits with 1 when anything failed.
+- `embed::testing`, for hosts that run tests with their own natives: `run_tests`, `run_test`, and `tests` (the
+  list without running it), reporting an `Outcome` per test (`Passed`, `Failed` with each failed check's position
+  and message, `Errored`, `FailedAsExpected`, `ExpectedError`); and `Expectations` and `check_expectations` for
+  a document's `expect:`, `expect-error:`, and `input:` lines. The repository's fixture suite uses them.
 
 ### Changed
 

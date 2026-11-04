@@ -42,6 +42,8 @@ pub use crate::value::{display, List, Value};
 pub use crate::vm::{Limits, Stats};
 pub use crate::Options;
 
+pub mod testing;
+
 // ---------------------------------------------------------------------------------------------------------
 // Sources and errors
 

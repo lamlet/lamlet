@@ -1,0 +1,19 @@
+$[Import* std]
+std's testing macros build a static list of `{name, run, fails}` records; running a test is calling its `run`.
+$[# {sq x} {* x x}]
+$[# suite {!tests
+  {!test "squares" {expectEqual {sq 3} 9} {expectTrue {> {sq 2} 0} "positive"}}
+  {!test "broken" {expectEqual {sq 3} 10} {expectTrue {< 2 1} "2 < 1"}}
+  {!test "empty"}
+  {!testFails "overflow" "overflow" {* 9223372036854775807 2}}
+}]
+${map suite .name}
+${{.run {nth suite 0}}}
+${{.run {nth suite 1}}}
+${{.run {nth suite 2}}}
+${map suite .fails}
+expect: ["squares", "broken", "empty", "overflow"]
+expect: [#pass, #pass]
+expect: [#fail("expected 10, got 9"), #fail("expected true: 2 < 1")]
+expect: []
+expect: [#none, #none, #none, #some("overflow")]

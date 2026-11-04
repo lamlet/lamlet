@@ -1,0 +1,5 @@
+$[Import* std]
+A test may use only static names: `!tests` builds the list during preparation.
+$[# n {+ 1 2}]
+$[# tests {!tests {!test "uses a runtime binding" {expectEqual n 3}}}]
+expect-error: stage: cannot use the runtime binding `n`

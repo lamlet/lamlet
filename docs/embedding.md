@@ -124,6 +124,32 @@ let v: Value = instance.call(&curve, vec![Value::Float(0.5)])?;
 
 Calls are cheap. `host_curve.rs` measures about half a microsecond for a small curve in a release build.
 
+### Running a document's tests
+
+`lamlet::embed::testing` runs the tests a document binds to `_tests` (std's `!tests`, quick start §10) in any
+host, with the host's natives, which `lamlet test` cannot register:
+
+```rust
+use lamlet::embed::testing::*;
+
+let doc = engine.check(SourceFile::new("curves.test.lam", source))?;
+let mut instance = engine.instance(&doc)?;
+for report in run_tests(&doc, &mut instance, DEFAULT_TESTS)? {
+    if !report.outcome.passed() {
+        eprintln!("{}: {:?}", report.name, report.outcome);
+    }
+}
+// Or the documents' `expect:` / `expect-error:` lines:
+let problems: Vec<String> = check_expectations(&engine, SourceFile::new("page.lam", page));
+```
+
+- **Each test is one call** (`run_test`), under the instance's limits, with its own budget. A runtime error or
+  an exhausted budget is that test's `Outcome::Errored`; the instance stays usable for the next test.
+- **`Outcome`** is `Passed { checks }`, `Failed { checks, failures }` (the position and message of each failed
+  check), `Errored(Error)`, `FailedAsExpected { message }`, or `ExpectedError { expected, got }` for a
+  `!testFails` test whose body returned or failed differently. `passed()` is true for the first and fourth.
+- **`tests(&doc, name)`** reads the list without running it, for a host that schedules tests itself.
+
 ## 4. Host functions
 
 A host gives documents functions of its own, called *natives*. The Lamlet type comes from the Rust types:

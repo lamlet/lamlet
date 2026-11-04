@@ -425,3 +425,42 @@ $[# hash K::hash]
 
 Fn([], Int), Runtime. The Unix time (seconds) that the host supplies for this evaluation; constant within it.
 $[Native time {Fn {'} Int} "std.time/now" Runtime]
+
+10. Testing
+
+A document binds `_tests` to a static list of tests (private, so a library can keep its tests inline), and
+`lamlet test` runs each test on its own: a failed check, a runtime error, or an exhausted budget fails that
+test only. A test's checks are values, not aborts, so one test reports every check that failed.
+
+    [# _tests {!tests
+      {!test "squares" {expectEqual {sq 3} 9} {expectTrue {> {sq 2} 0} "positive"}}
+      {!testFails "overflow" "overflow" {* 9223372036854775807 2}}
+    }]
+
+Type. The result of one check: `#pass` or `#fail` with a message.
+$[# Check [% {Variant {' {Field "pass" Unit} {Field "fail" String}}}]]
+
+Eq A: Fn([A, A], Check). Passes when got equals want; otherwise fails, showing both.
+$[# {expectEqual got want}
+    {: {!if {= got want} {#pass unit} {#fail {concat {' "expected " {debug want} ", got " {debug got}}}}} Check}
+]
+
+Fn([Bool, String], Check). Passes when b is true; otherwise fails with the description `what`.
+$[# {expectTrue b what} {: {!if b {#pass unit} {#fail {++ "expected true: " what}}} Check}]
+
+$[# {_test name run} {. name name run run fails none}]
+$[# {_testFails name message body} {. name name run {^ {} [# _r {body}] {'}} fails {some message}}]
+
+{!test name check...}: a test named `name` whose body is its checks, run (in order) only when the test runs.
+$[Macro !test
+    {{name check ...} {_test name {^ {} {' check ...}}}}]
+
+{!testFails name message body}: a test that passes when evaluating body fails with an error whose message
+contains `message`, and fails when body returns.
+$[Macro !testFails
+    {{name message body} {_testFails name message {^ {} body}}}]
+
+{!tests t...}: the list of tests t, built during preparation, so that a host can find and run them. A test may
+use only static names.
+$[Macro !tests
+    {{t ...} [% {' t ...}]}]
