@@ -16,6 +16,7 @@ cargo build --release
 ./target/release/lamlet eval file.lam     # check, then evaluate; JSON results on stdout
 ./target/release/lamlet check file.lam    # types and stages only
 ./target/release/lamlet test dir/         # run the tests of every .lam file under dir (section 10)
+./target/release/lamlet fmt file.lam      # lay out the code in place (--check: only list what it would change)
 ```
 
 A Lamlet file is a **document**. Only `$`-prefixed regions are code; everything else is text, printed as

@@ -261,3 +261,30 @@ fn test_command_reports_each_test() {
     assert!(text.ends_with("2 files, 2 tests: 1 passed, 1 failed, 0 errored\n"), "{}", text);
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+#[test]
+fn fmt_lays_out_code_in_place_and_check_changes_nothing() {
+    let dir = std::env::temp_dir().join(format!("lamlet-fmt-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("doc.lam");
+    let file = file.to_str().unwrap();
+    let fields: Vec<String> = (0..8).map(|i| format!("{{Field \"field{i}\" Float}}")).collect();
+    let source = format!("Text.\n$[# Thing [% {{Struct {{' {}}}}}]]\n${{3}}\n", fields.join(" "));
+    std::fs::write(file, &source).unwrap();
+
+    let (code, _, _) = lamlet(&["fmt", "--check", file], None);
+    assert_eq!(code, 1);
+    assert_eq!(std::fs::read_to_string(file).unwrap(), source);
+
+    let (code, _, _) = lamlet(&["fmt", file], None);
+    assert_eq!(code, 0);
+    let formatted = std::fs::read_to_string(file).unwrap();
+    assert!(formatted.starts_with("Text.\n$[# Thing [% {Struct {'\n    {Field \"field0\" Float}\n"), "{formatted}");
+    assert!(formatted.ends_with("}}]]\n${3}\n"), "{formatted}");
+
+    let (code, _, _) = lamlet(&["fmt", "--check", file], None);
+    assert_eq!(code, 0);
+    let (code, _, _) = lamlet(&["fmt", "--width"], None);
+    assert_eq!(code, 2);
+    std::fs::remove_dir_all(&dir).unwrap();
+}

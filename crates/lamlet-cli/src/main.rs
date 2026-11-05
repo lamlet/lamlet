@@ -29,6 +29,7 @@ const USAGE: &str = "usage:
   lamlet test    PATH... [--filter TEXT] [--tests NAME] [--json] [--package NAME=PATH]... [--input KEY=JSON]...
                  [--max-instructions N]
   lamlet batch   < request.json
+  lamlet fmt     FILE... [--check] [--width N]
 
 `lamlet FILE` runs the document from top to bottom and prints it: text as written, each `${...}` or `$name`
 replaced by its value, and declarations (`$[# ...]`, imports) removed with their lines.
@@ -52,6 +53,11 @@ static list it binds to `_tests` (std's `{!tests {!test NAME CHECK...} ...}`); e
 check, runtime error, or exhausted budget fails that test only. --filter runs the tests whose name contains
 TEXT. A file's `expect: VALUE` and `expect-error: KIND: TEXT` lines are checked too. It prints a report (JSON
 with --json) and exits with 1 when anything failed.
+
+`fmt` lays out the code of each FILE in place: an expression that fits in N columns (100) stays on one line,
+and a longer one puts one part per line at a 4-space indent. It changes only the whitespace inside `${...}` and
+`$[...]` regions. With --check it changes nothing, lists the files it would change, and exits with 1 when there
+is one.
 
 `std.time` returns one Unix timestamp snapshot per invocation; override it with --input std.time=SECONDS.
 Packages given with --package export every top-level definition not starting with `_`.
@@ -90,6 +96,9 @@ fn main() {
     if let Some(code) = extension(&args) {
         std::process::exit(code);
     }
+    if args.first().map(String::as_str) == Some("fmt") {
+        std::process::exit(fmt(&args[1..]));
+    }
     let req = match parse_args(&args) {
         Ok(r) => r,
         Err(m) => {
@@ -113,7 +122,70 @@ fn main() {
     std::process::exit(if ok { 0 } else { 1 });
 }
 
-const COMMANDS: &[&str] = &["run", "build", "check", "eval", "call", "test", "batch"];
+const COMMANDS: &[&str] = &["run", "build", "check", "eval", "call", "test", "batch", "fmt"];
+
+/// `lamlet fmt FILE... [--check] [--width N]`: the exit status.
+fn fmt(args: &[String]) -> i32 {
+    let mut style = lamlet::format::Style::default();
+    let mut check = false;
+    let mut files = Vec::new();
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--check" => check = true,
+            "--width" => {
+                i += 1;
+                match args.get(i).and_then(|w| w.parse().ok()) {
+                    Some(w) => style.width = w,
+                    None => {
+                        eprintln!("lamlet: --width expects an integer\n\n{}", USAGE);
+                        return 2;
+                    }
+                }
+            }
+            a if a.starts_with("--") => {
+                eprintln!("lamlet: unknown option `{}`\n\n{}", a, USAGE);
+                return 2;
+            }
+            a => files.push(a.to_string()),
+        }
+        i += 1;
+    }
+    if files.is_empty() {
+        eprintln!("lamlet: fmt expects a FILE\n\n{}", USAGE);
+        return 2;
+    }
+    let mut status = 0;
+    for file in &files {
+        let text = match std::fs::read_to_string(file) {
+            Ok(t) => t,
+            Err(e) => {
+                eprintln!("lamlet: reading {}: {}", file, e);
+                return 2;
+            }
+        };
+        let formatted = match lamlet::format::format_document(&text, style) {
+            Ok(f) => f,
+            Err(d) => {
+                let mut map = SourceMap::default();
+                map.add(file.clone(), text);
+                eprintln!("{}", d.render(&map));
+                status = 1;
+                continue;
+            }
+        };
+        if formatted != text {
+            println!("{}", file);
+            if check {
+                status = 1;
+            } else if let Err(e) = std::fs::write(file, formatted) {
+                eprintln!("lamlet: writing {}: {}", file, e);
+                return 2;
+            }
+        }
+    }
+    status
+}
 
 /// `lamlet NAME ARGS...` for an extension: when NAME is not a command or an existing file, run `lamlet-NAME ARGS...`
 /// (the system finds it on the PATH). On Unix it replaces this process; elsewhere it runs and returns its exit

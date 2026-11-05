@@ -384,7 +384,10 @@ Don't emulate these by guessing at syntax:
    region's `type`. Alternatively, ascribe the type you expect with `{: e T}`.
 5. To test Lamlet code, bind `_tests` with `{!tests {!test "name" {expectEqual got want} ...} ...}` and run
    `./target/release/lamlet test FILE-OR-DIR` (§8, *Writing tests*).
-6. For a library-level change, also run `cargo test` (unit, semantic, fixture, CLI, and adapter suites, in
+6. Lay out the code with `./target/release/lamlet fmt FILE.lam`: an expression that fits in 100 columns stays on
+   one line, and a longer one puts one part per line (a list's items, a record's fields, a call's operands) at a
+   4-space indent. It changes only whitespace inside code; `--check` lists the files it would change.
+7. For a library-level change, also run `cargo test` (unit, semantic, fixture, CLI, and adapter suites, in
    debug and release).
 
 ### Writing tests

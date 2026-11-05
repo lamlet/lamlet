@@ -16,6 +16,7 @@ pub mod check;
 pub mod compile;
 pub mod core;
 pub mod embed;
+pub mod format;
 pub mod host;
 pub mod package;
 pub mod source;

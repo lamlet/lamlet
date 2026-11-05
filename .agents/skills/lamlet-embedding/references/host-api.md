@@ -11,6 +11,7 @@ cargo build --release
 ./target/release/lamlet call FILE.lam area 3 4         # call a static top-level function with JSON arguments
 ./target/release/lamlet test PATH...                   # run each file's `_tests` and expect: lines; exit 1 on failure
 ./target/release/lamlet batch REQUEST.json             # several documents/packages in one request
+./target/release/lamlet fmt FILE.lam... [--check]      # lay out the code (format::format_document); --check lists, exit 1
 #   options: --package NAME=PATH   --input KEY=JSON   --require-linked   --max-instructions N
 ```
 

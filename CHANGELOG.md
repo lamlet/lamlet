@@ -4,6 +4,20 @@ All notable changes to this project are listed here. Versions follow [Semantic V
 while the version is `0.x`, a minor release may break the API. The language version (`LANGUAGE_VERSION`) and
 bytecode version (`BYTECODE_VERSION`) are tracked separately from the crate version.
 
+## Unreleased
+
+### Added
+
+- `lamlet fmt FILE... [--check] [--width N]` lays out the code of documents in place, and `format::format_document`
+  (with `format::Style`) is the same for hosts. An expression that fits in the width (100 columns) stays on one
+  line; a longer one breaks Lisp-style, one part per line at a 4-space indent from its line's indent, with its
+  closing brackets on its last line: a list's items (or filled lines when every item is an atom), a record's or a
+  declaration's pairs, a call's operands after its leading atoms, a form's header (`[# {f x}`, `{^ {x}`, `{!if c`)
+  kept on its first line, the last operand hung from that line when the rest fits, and `{: e T}`'s type after its
+  expression. Only whitespace inside `${...}` and `$[...]` changes; prose, `$name` and template regions, disabled
+  regions, code fences, and regions with a line comment stay as written. `--check` changes nothing, lists the files
+  it would change, and exits with 1 when there is one.
+
 ## 0.4.1 (2026-11-03)
 
 Tests: a document binds `_tests` with std's `!tests`, and `lamlet test` runs each test on its own. Code fences
