@@ -1,0 +1,32 @@
+$[Import* std]
+Sorting is stable and works on any ordered type.
+${sort {' 3 1 2 1}}
+expect: [1, 1, 2, 3]
+${sort {' "pear" "apple" "fig"}}
+expect: ["apple", "fig", "pear"]
+${sort {'}}
+expect: []
+${sortBy {' "ccc" "a" "bb" "d"} {^ {s} {length {chars s}}}}
+expect: ["a", "d", "bb", "ccc"]
+${sortBy {' {. n "b" k 2} {. n "a" k 1} {. n "c" k 2}} .k}
+expect: [{k: 1, n: "a"}, {k: 2, n: "b"}, {k: 2, n: "c"}]
+${length {sort {reverse {range 0 1000}}}}
+expect: 1000
+Searching returns an option.
+${find {' 1 4 6} {^ {x} {> x 3}}}
+expect: #some(4)
+${find {' 1 2} {^ {x} {> x 3}}}
+expect: #none
+${findIndex {' "a" "b" "c"} {^ {x} {= x "c"}}}
+expect: #some(2)
+${lookup {' {pair "a" 1} {pair "b" 2}} "b"}
+expect: #some(2)
+${lookup {' {pair "a" 1}} "z"}
+expect: #none
+Counting, indexing, and splitting.
+${count {' 1 2 3 4} {^ {x} {= {% x 2} 0}}}
+expect: 2
+${indexed {' "a" "b"}}
+expect: [{first: 0, second: "a"}, {first: 1, second: "b"}]
+${partition {' 1 2 3 4 5} {^ {x} {> x 2}}}
+expect: {first: [3, 4, 5], second: [1, 2]}

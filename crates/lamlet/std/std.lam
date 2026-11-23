@@ -245,6 +245,45 @@ $[# {unique xs}
 Eq A: Fn([List(A), List(A)], List(A)). Concatenates two lists and keeps the first occurrence of each value.
 $[# {union xs ys} {unique {append xs ys}}]
 
+Fn([List(A), Fn([A], Bool)], Int). The number of elements for which p is true.
+$[# {count xs p} {fold xs 0 {^ {n x} {!if {p x} {+ n 1} n}}}]
+
+Fn([List(A)], List({first: Int, second: A})). Pairs each element with its zero-based index:
+{indexed {' "a" "b"}} is [{first: 0, second: "a"}, {first: 1, second: "b"}].
+$[# {indexed xs} {zip {range 0 {length xs}} xs}]
+
+Fn([List(A), Fn([A], Bool)], {first: List(A), second: List(A)}). Splits the list into the elements for which
+p is true and the rest, each in order.
+$[# {partition xs p}
+    [# r {fold xs {. first {'} second {'}} {^ {acc x}
+        {!if {p x} {.first= acc {cons x {.first acc}}} {.second= acc {cons x {.second acc}}}}}}]
+    {. first {reverse {.first r}} second {reverse {.second r}}}
+]
+
+Private. Merges two lists already sorted by key; among equal keys, the elements of xs come first.
+$[# {_merge xs ys key}
+    [# {go xs ys acc}
+        {K::caseList xs {^ {} {append {reverse acc} ys}} {^ {x xr}
+            {K::caseList ys {^ {} {append {reverse acc} xs}} {^ {y yr}
+                {!if {< {key y} {key x}} {go xs yr {cons y acc}} {go xr ys {cons x acc}}}
+            }}
+        }}
+    ]
+    {go xs ys {'}}
+]
+
+Ord K: Fn([List(A), Fn([A], K)], List(A)). The elements ordered by key, smallest first. The sort is stable
+(elements with equal keys keep their order) and takes O(n log n) steps:
+{sortBy {' "ccc" "a" "bb"} {^ {s} {length {chars s}}}} is ["a", "bb", "ccc"].
+$[# {sortBy xs key}
+    [# n {length xs}]
+    [# half {div n 2}]
+    {!if {< n 2} xs {_merge {sortBy {take xs half} key} {sortBy {drop xs half} key} key}}
+]
+
+Ord A: Fn([List(A)], List(A)). The elements in ascending order: {sort {' 3 1 2}} is [1, 2, 3].
+$[# {sort xs} {sortBy xs id}]
+
 6. Records, variants, options, and pairs
 
 Records are written {. label value ...}; .label reads a field and .label= replaces one. Variants are built
@@ -280,6 +319,24 @@ $[# {caseOption o ifNone ifSome} {match o {. none {^ {u} {ifNone}} some ifSome}}
 
 Fn([<none: Unit, some: A>, A], A). The payload, or the default for none.
 $[# {withDefault o default} {caseOption o {^ {} default} id}]
+
+Fn([List(A), Fn([A], Bool)], <none: Unit, some: A>). The first element for which p is true, or none.
+$[# {find xs p}
+    {K::caseList xs {^ {} none} {^ {x rest} {!if {p x} {some x} {find rest p}}}}
+]
+
+Fn([List(A), Fn([A], Bool)], <none: Unit, some: Int>). The zero-based index of the first element for which p
+is true, or none.
+$[# {findIndex xs p}
+    [# {go ys i} {K::caseList ys {^ {} none} {^ {y rest} {!if {p y} {some i} {go rest {+ i 1}}}}}]
+    {go xs 0}
+]
+
+Eq K: Fn([List({first: K, second: V}), K], <none: Unit, some: V>). The value paired with the first
+occurrence of key, or none: {lookup {' {pair "a" 1} {pair "b" 2}} "b"} is #some(2).
+$[# {lookup pairs key}
+    {caseOption {find pairs {^ {p} {= {.first p} key}}} {^ {} none} {^ {p} {some {.second p}}}}
+]
 
 7. Types
 
@@ -365,6 +422,90 @@ $[# {split s sep}
     [# {step acc c} {!if {= c sep} {. done {cons {.cur acc} {.done acc}} cur ""} {.cur= acc {++ {.cur acc} c}}}]
     [# r {fold {chars s} {. done {'} cur ""} step}]
     {reverse {cons {.cur r} {.done r}}}
+]
+
+Private. True when the scalars ps begin the scalars cs.
+$[# {_isPrefix ps cs}
+    {K::caseList ps {^ {} true} {^ {p pr}
+        {K::caseList cs {^ {} false} {^ {c cr} {!and {= p c} {_isPrefix pr cr}}}}
+    }}
+]
+
+Fn([String, String], Bool). True when s begins with prefix: {"lamlet".startsWith "lam"} is true.
+$[# {startsWith s prefix} {_isPrefix {chars prefix} {chars s}}]
+
+Fn([String, String], Bool). True when s ends with suffix: {"page.lam".endsWith ".lam"} is true.
+$[# {endsWith s suffix} {_isPrefix {reverse {chars suffix}} {reverse {chars s}}}]
+
+Fn([String, String], <none: Unit, some: Int>). The scalar index (zero-based) of the first occurrence of part
+in s, or none: {"banana".indexOf "na"} is #some(2). The empty String occurs at 0.
+$[# {indexOf s part}
+    [# ps {chars part}]
+    [# {go cs i}
+        {!if {_isPrefix ps cs} {some i} {K::caseList cs {^ {} none} {^ {c rest} {go rest {+ i 1}}}}}]
+    {go {chars s} 0}
+]
+
+Fn([String, String, String], String). Replaces every occurrence of old in s, from left to right, by new:
+{"a-b-c".replace "-" ", "} is "a, b, c". An empty old is an error.
+$[# {replace s old new}
+    [# ps {chars old}]
+    [# n {length ps}]
+    [# {go cs acc}
+        {K::caseList cs {^ {} acc} {^ {c rest}
+            {!if {_isPrefix ps cs} {go {drop cs n} {cons new acc}} {go rest {cons c acc}}}}}]
+    {!if {= n 0} {error "replace: the text to replace is empty"} {concat {reverse {go {chars s} {'}}}}}
+]
+
+Private. Whether a scalar is white space (a space, tab, line feed, or carriage return).
+$[# {_isSpace c} {contains {' " " "\t" "\n" "\r"} c}]
+
+Private. The scalars after any leading white space.
+$[# {_dropSpace cs} {K::caseList cs {^ {} cs} {^ {c rest} {!if {_isSpace c} {_dropSpace rest} cs}}}]
+
+Fn([String], String). s without leading white space (spaces, tabs, line feeds, carriage returns).
+$[# {trimStart s} {concat {_dropSpace {chars s}}}]
+
+Fn([String], String). s without trailing white space.
+$[# {trimEnd s} {concat {reverse {_dropSpace {reverse {chars s}}}}}]
+
+Fn([String], String). s without leading or trailing white space: {trim "  hi \n"} is "hi".
+$[# {trim s} {trimEnd {trimStart s}}]
+
+Fn([String, Int], String). s repeated n times; empty when n is zero or negative.
+$[# {repeat s n} {concat {map {range 0 n} {^ {i} s}}}]
+
+Fn([String, Int, String], String). s with copies of fill (usually one scalar) added in front until it has
+width scalars: {padStart "7" 3 "0"} is "007". A longer s is unchanged.
+$[# {padStart s width fill} {++ {repeat fill {- width {length {chars s}}}} s}]
+
+Fn([String, Int, String], String). s with copies of fill added after it until it has width scalars:
+{padEnd "ab" 4 "."} is "ab..".
+$[# {padEnd s width fill} {++ s {repeat fill {- width {length {chars s}}}}}]
+
+Private. The decimal digits, in order of value.
+$[# _digits {' "0" "1" "2" "3" "4" "5" "6" "7" "8" "9"}]
+
+Private. The digits cs read onto acc as a negative number (so the most negative Int fits), or none when a
+scalar is not a digit or the number does not fit.
+$[# {_negativeDigits cs acc}
+    {K::caseList cs {^ {} {some acc}} {^ {c rest}
+        {caseOption {findIndex _digits {^ {d} {= d c}}} {^ {} none} {^ {d}
+            {!if {!or {> acc -922337203685477580} {!and {= acc -922337203685477580} {<= d 8}}}
+                {_negativeDigits rest {- {* acc 10} d}}
+                none}}}}}
+]
+
+Fn([String], <none: Unit, some: Int>). The Int written in decimal in s, with an optional leading "-", or none
+when s is anything else (including spaces) or the number does not fit in an Int: {parseInt "-42"} is
+#some(-42), and {parseInt "4x"} is #none.
+$[# {parseInt s}
+    [# cs {chars s}]
+    [# negative {!and {not {isEmpty cs}} {= {head cs} "-"}}]
+    [# digits {!if negative {tail cs} cs}]
+    {!if {isEmpty digits} none
+        {caseOption {_negativeDigits digits 0} {^ {} none} {^ {v}
+            {!if negative {some v} {!if {< v -9223372036854775807} none {some {neg v}}}}}}}
 ]
 
 Private. The format renderer over a template's scalars.

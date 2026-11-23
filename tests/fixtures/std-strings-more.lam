@@ -1,0 +1,60 @@
+$[Import* std]
+${"lamlet".startsWith "lam"}
+expect: true
+${"lam".startsWith "lamlet"}
+expect: false
+${"page.lam".endsWith ".lam"}
+expect: true
+${"banana".indexOf "na"}
+expect: #some(2)
+${"banana".indexOf "x"}
+expect: #none
+${"abc".indexOf ""}
+expect: #some(0)
+${"a-b-c".replace "-" ", "}
+expect: "a, b, c"
+${"aaa".replace "aa" "b"}
+expect: "ba"
+${trim "  hi there \n"}
+expect: "hi there"
+${trimStart "  x "}
+expect: "x "
+${trimEnd "  x "}
+expect: "  x"
+${trim "   "}
+expect: ""
+${repeat "ab" 3}
+expect: "ababab"
+${repeat "ab" -1}
+expect: ""
+${padStart "7" 3 "0"}
+expect: "007"
+${padStart "1234" 3 "0"}
+expect: "1234"
+${padEnd "ab" 4 "."}
+expect: "ab.."
+Parsing integers.
+${parseInt "42"}
+expect: #some(42)
+${parseInt "-42"}
+expect: #some(-42)
+${parseInt "007"}
+expect: #some(7)
+${parseInt "9223372036854775807"}
+expect: #some(9223372036854775807)
+${parseInt "-9223372036854775808"}
+expect: #some(-9223372036854775808)
+${parseInt "9223372036854775808"}
+expect: #none
+${parseInt "-9223372036854775809"}
+expect: #none
+${parseInt "99999999999999999999"}
+expect: #none
+${parseInt ""}
+expect: #none
+${parseInt "-"}
+expect: #none
+${parseInt " 4"}
+expect: #none
+${parseInt "4x"}
+expect: #none

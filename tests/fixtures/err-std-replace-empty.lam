@@ -1,0 +1,3 @@
+$[Import* std]
+${"abc".replace "" "x"}
+expect-error: runtime: replace: the text to replace is empty

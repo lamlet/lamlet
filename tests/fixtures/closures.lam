@@ -24,8 +24,8 @@ expect: 1
 $[# {fib n} {!if {< n 2} n {+ {fib {- n 1}} {fib {- n 2}}}}]
 ${fib 20}
 expect: 6765
-$[# count {^ loop {n acc} {!if {= n 0} acc {loop {- n 1} {+ acc 1}}}}]
-${count 20000 0}
+$[# countUp {^ loop {n acc} {!if {= n 0} acc {loop {- n 1} {+ acc 1}}}}]
+${countUp 20000 0}
 expect: 20000
 A recursive lambda's name is local to it; inner closures may capture it, and it can be returned.
 $[# countTo {^ next {n limit} {^ {} {!if {>= n limit} n {{next {+ n 1} limit}}}}}]

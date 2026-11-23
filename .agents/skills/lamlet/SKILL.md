@@ -302,7 +302,10 @@ from data, and curve combinators. `cargo test` checks every `expect:` line in bo
 - **Formulas:** `{latex f"{\frac{$a}{2}}"}` (a `Latex`); put a name in one with `${latexEscape name}`. `format` takes `List(String)`, so convert values with `str`
   first. `++` concatenates two Strings; `concat` and `join` work on lists. `chars` splits a String into scalars,
   and `substr`/`split` work on Strings.
-- **Options:** `some`, `none`, `withDefault`, `caseOption`.
+- **Options:** `some`, `none`, `withDefault`, `caseOption`. Searches return them: `find`, `findIndex`, `lookup`
+  (a list of pairs), `indexOf`, `parseInt`.
+- **Sorting:** `sort` (any `Ord`), `sortBy xs key` (stable). **Text helpers:** `startsWith`, `endsWith`,
+  `replace`, `trim`, `repeat`, `padStart`, `padEnd`.
 - **Pairs:** `pair`, `.first`, `.second`.
 - **State machines:** an `update : Fn([State, Event], State)`, where events are variants. Replay events with
   `{fold events initial update}`.

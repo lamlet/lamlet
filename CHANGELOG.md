@@ -6,7 +6,19 @@ bytecode version (`BYTECODE_VERSION`) are tracked separately from the crate vers
 
 ## Unreleased
 
+std gains list and text helpers. A document that imports `std` with `Import*` and defines one of the new names
+itself (`count`, `indexed`, `partition`, `sort`, `sortBy`, `find`, `findIndex`, `lookup`, `startsWith`,
+`endsWith`, `indexOf`, `replace`, `trim`, `trimStart`, `trimEnd`, `repeat`, `padStart`, `padEnd`, `parseInt`)
+must rename it or import std otherwise.
+
 ### Added
+
+- std lists: `sort` and `sortBy` (a stable merge sort, by value or by an `Ord` key), `count`, `indexed` (pairs
+  with zero-based indices), `partition`, and the option-returning searches `find`, `findIndex`, and `lookup` (in
+  a list of pairs).
+- std text: `startsWith`, `endsWith`, `indexOf` (a scalar index, as an option), `replace` (every occurrence),
+  `trim`, `trimStart`, `trimEnd`, `repeat`, `padStart`, `padEnd`, and `parseInt` (decimal, with an optional `-`;
+  none for anything else or a number that does not fit an Int).
 
 - `lamlet fmt FILE... [--check] [--width N]` lays out the code of documents in place, and `format::format_document`
   (with `format::Style`) is the same for hosts. An expression that fits in the width (100 columns) stays on one

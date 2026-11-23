@@ -158,9 +158,9 @@ fn native_failures_name_the_api_and_the_calling_region() {
     assert!(err.to_string().contains("native `host.counts/leaves` failed: no tree named \"fir\""), "{}", err);
     assert_eq!(err.locations()[0].as_ref().unwrap().line, 2);
     // At runtime it is a runtime error, positioned at the call.
-    let doc = e.check(SourceFile::new("g.lam", "$[Import* std]$[Import* host]\n$[# count {^ {name} {leaves name}}]")).unwrap();
+    let doc = e.check(SourceFile::new("g.lam", "$[Import* std]$[Import* host]\n$[# countLeaves {^ {name} {leaves name}}]")).unwrap();
     let mut inst = e.instance(&doc).unwrap();
-    let err = inst.call_typed::<_, i64>(&doc.binding("count").unwrap(), ("fir",)).unwrap_err();
+    let err = inst.call_typed::<_, i64>(&doc.binding("countLeaves").unwrap(), ("fir",)).unwrap_err();
     assert_eq!(err.kind(), ErrorKind::Runtime);
     assert!(err.to_string().contains("host.counts/leaves"), "{}", err);
     assert_eq!(err.locations()[0].as_ref().unwrap().line, 2);

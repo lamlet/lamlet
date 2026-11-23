@@ -230,7 +230,7 @@ fn conditional_laziness() {
 fn recursive_functions() {
     assert_eq!(one(&s("$[# fact {^ f {n} {!if {= n 0} 1 {* n {f {- n 1}}}}}] ${fact 20}")), "2432902008176640000");
     // Tail recursion runs in constant VM frames.
-    assert_eq!(one(&s("$[# count {^ loop {n acc} {!if {= n 0} acc {loop {- n 1} {+ acc 1}}}}] ${count 1000000 0}")), "1000000");
+    assert_eq!(one(&s("$[# countUp {^ loop {n acc} {!if {= n 0} acc {loop {- n 1} {+ acc 1}}}}] ${countUp 1000000 0}")), "1000000");
     // Non-tail recursion over long lists runs on VM frames, not the host stack.
     assert_eq!(one(&s("${length {map {range 0 50000} {^ {x} x}}}")), "50000");
     // The list library is tail-recursive: lists longer than the frame limit are fine.

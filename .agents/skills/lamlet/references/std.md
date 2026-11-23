@@ -84,6 +84,11 @@ Each entry: name, then its doc (which starts with its type when it has one). `_n
 - `contains` — Eq A: Fn([List(A), A], Bool). True when some element equals the value.
 - `unique` — Eq A: Fn([List(A)], List(A)). Keeps the first occurrence of each value, in order.
 - `union` — Eq A: Fn([List(A), List(A)], List(A)). Concatenates two lists and keeps the first occurrence of each value.
+- `count` — Fn([List(A), Fn([A], Bool)], Int). The number of elements for which p is true.
+- `indexed` — Fn([List(A)], List({first: Int, second: A})). Pairs each element with its zero-based index: {indexed {' "a" "b"}} is [{first: 0, second: "a"}, {first: 1, second: "b"}].
+- `partition` — Fn([List(A), Fn([A], Bool)], {first: List(A), second: List(A)}). Splits the list into the elements for which p is true and the rest, each in order.
+- `sortBy` — Ord K: Fn([List(A), Fn([A], K)], List(A)). The elements ordered by key, smallest first. The sort is stable (elements with equal keys keep their order) and takes O(n log n) steps: {sortBy {' "ccc" "a" "bb"} {^ {s} {length {chars s}}}} is ["a", "bb", "ccc"].
+- `sort` — Ord A: Fn([List(A)], List(A)). The elements in ascending order: {sort {' 3 1 2}} is [1, 2, 3].
 
 ## 6. Records, variants, options, and pairs
 
@@ -96,6 +101,9 @@ Each entry: name, then its doc (which starts with its type when it has one). `_n
 - `none` — <none: Unit, some: A>. The absent optional value.
 - `caseOption` — Fn([<none: Unit, some: A>, Fn([], R), Fn([A], R)], R). Calls ifNone for none, or ifSome with the payload.
 - `withDefault` — Fn([<none: Unit, some: A>, A], A). The payload, or the default for none.
+- `find` — Fn([List(A), Fn([A], Bool)], <none: Unit, some: A>). The first element for which p is true, or none.
+- `findIndex` — Fn([List(A), Fn([A], Bool)], <none: Unit, some: Int>). The zero-based index of the first element for which p is true, or none.
+- `lookup` — Eq K: Fn([List({first: K, second: V}), K], <none: Unit, some: V>). The value paired with the first occurrence of key, or none: {lookup {' {pair "a" 1} {pair "b" 2}} "b"} is #some(2).
 
 ## 7. Types
 
@@ -125,6 +133,17 @@ Each entry: name, then its doc (which starts with its type when it has one). `_n
 - `join` — Fn([String, List(String)], String). Concatenates with sep between neighbours.
 - `substr` — Fn([String, Int, Int], String). The len scalars starting at index start (zero-based), clipped to the String: {"Hello!".substr 0 3} is "Hel".
 - `split` — Fn([String, String], List(String)). The pieces between occurrences of sep, a one-scalar String: {"a,b,,c".split ","} is ["a", "b", "", "c"].
+- `startsWith` — Fn([String, String], Bool). True when s begins with prefix: {"lamlet".startsWith "lam"} is true.
+- `endsWith` — Fn([String, String], Bool). True when s ends with suffix: {"page.lam".endsWith ".lam"} is true.
+- `indexOf` — Fn([String, String], <none: Unit, some: Int>). The scalar index (zero-based) of the first occurrence of part in s, or none: {"banana".indexOf "na"} is #some(2). The empty String occurs at 0.
+- `replace` — Fn([String, String, String], String). Replaces every occurrence of old in s, from left to right, by new: {"a-b-c".replace "-" ", "} is "a, b, c". An empty old is an error.
+- `trimStart` — Fn([String], String). s without leading white space (spaces, tabs, line feeds, carriage returns).
+- `trimEnd` — Fn([String], String). s without trailing white space.
+- `trim` — Fn([String], String). s without leading or trailing white space: {trim "  hi \n"} is "hi".
+- `repeat` — Fn([String, Int], String). s repeated n times; empty when n is zero or negative.
+- `padStart` — Fn([String, Int, String], String). s with copies of fill (usually one scalar) added in front until it has width scalars: {padStart "7" 3 "0"} is "007". A longer s is unchanged.
+- `padEnd` — Fn([String, Int, String], String). s with copies of fill added after it until it has width scalars: {padEnd "ab" 4 "."} is "ab..".
+- `parseInt` — Fn([String], <none: Unit, some: Int>). The Int written in decimal in s, with an optional leading "-", or none when s is anything else (including spaces) or the number does not fit in an Int: {parseInt "-42"} is #some(-42), and {parseInt "4x"} is #none.
 - `format` — Fn([String, List(String)], String). Replaces each {} in the template by the next argument; {{ and }} are literal braces. Too few or too many arguments is an error. For typed holes, prefer a template f"{...}".
 - `Latex` — The Type of formulas: a record holding LaTeX source, so hosts can render it as math.
 - `latex` — Fn([String], Latex). A formula from its LaTeX source, often a template: {latex f"{\frac{1}{2}}"}.
