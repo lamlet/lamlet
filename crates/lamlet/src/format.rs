@@ -35,7 +35,7 @@ impl Default for Style {
 }
 
 /// Forms whose first operand stays on their first line.
-const HEADED: &[&str] = &["^", "λ", "#", "%", "!if", "!case", "!let", "match"];
+const HEADED: &[&str] = &["^", "λ", "#", "%", "!if", "!case", "!let", "match", "matchElse"];
 
 enum Tree {
     Atom { text: String, glued: bool },

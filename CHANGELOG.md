@@ -6,9 +6,10 @@ bytecode version (`BYTECODE_VERSION`) are tracked separately from the crate vers
 
 ## Unreleased
 
-std gains list and text helpers. A document that imports `std` with `Import*` and defines one of the new names
+std gains list and text helpers, and `matchElse`. A document that imports `std` with `Import*` and defines one of the new names
 itself (`count`, `indexed`, `partition`, `sort`, `sortBy`, `find`, `findIndex`, `lookup`, `startsWith`,
-`endsWith`, `indexOf`, `replace`, `trim`, `trimStart`, `trimEnd`, `repeat`, `padStart`, `padEnd`, `parseInt`)
+`endsWith`, `indexOf`, `replace`, `trim`, `trimStart`, `trimEnd`, `repeat`, `padStart`, `padEnd`, `parseInt`,
+`matchElse`)
 must rename it or import std otherwise.
 
 ### Added
@@ -19,6 +20,11 @@ must rename it or import std otherwise.
 - std text: `startsWith`, `endsWith`, `indexOf` (a scalar index, as an option), `replace` (every occurrence),
   `trim`, `trimStart`, `trimEnd`, `repeat`, `padStart`, `padEnd`, and `parseInt` (decimal, with an optional `-`;
   none for anything else or a number that does not fit an Int).
+- `!case` takes a last clause `{else body}` for every alternative the other clauses do not name. It expands to
+  the new primitive `K::matchElse v handlers default` (std's `matchElse`), whose handlers must each name an
+  alternative of v, and whose default receives v itself.
+- Macro keywords: `[Macro !name [kw ...] {pattern template} ...]`. In a pattern, a keyword matches only the
+  same identifier instead of binding a variable.
 
 - `lamlet fmt FILE... [--check] [--width N]` lays out the code of documents in place, and `format::format_document`
   (with `format::Style`) is the same for hosts. An expression that fits in the width (100 columns) stays on one

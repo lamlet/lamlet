@@ -158,6 +158,11 @@ repeats several elements in one expansion. It reuses the reserved `...` in a pos
 no existing macro changes. Patterns do not accept it yet: matching a flat sequence in chunks (`{... k v} ...`
 against `a 1 b 2`) is the natural extension, deferred until a macro needs it.
 
+**Keywords.** A pattern identifier is a variable, so before keywords no clause could require a particular word:
+`!case`'s `{else d}` would also have matched `{circle r}` (a clause missing its body), quietly reading it as a
+default. A macro's keyword list (`[Macro !case [else] ...]`) makes those words match only themselves, as
+`syntax-rules` literals do. They compare by name, not by binding, so a keyword works whatever is in scope.
+
 **Limits.** Macro expansion depth (64), checker expression nesting (96), and reader nesting (200) are limited
 deliberately. Together they bound the host stack, so even unoptimized builds report a `limit` diagnostic rather
 than overflowing a 2 MiB thread stack.
@@ -353,6 +358,27 @@ failure stops the document. Procedural test discovery in the checker: a language
 know its source position (a macro cannot see one), so a failure is reported by its position in the test and the
 values it compared; a runtime error still carries its location. That a document fails to check can be tested
 only per document, by an `expect-error:` line, since checking stops at the first error.
+
+## D18. A default case: `K::matchElse`
+
+**Decision.** `K::matchElse v handlers default` calls the handler of v's alternative, or `default` with v itself
+when there is none. Its handlers must each name an alternative of v, but need not cover them all. std's `!case`
+accepts a last clause `{else body}`, which expands to it.
+
+**Why.** Handling one or two alternatives of a large variant needed a clause for every other one, each with the
+same body. `K::match` cannot express a default, since its handlers must cover the variant exactly (that is how a
+`match` determines the variant type), so this is a primitive. Its typing is a weaker form of the same relation:
+each handler adds `v has #l: τ`, the constraint a constructor `#l` adds, so a function using it stays
+polymorphic over every variant with those alternatives. The default receives the whole value because that is
+the only thing it can know about it; `!case`'s `else` ignores it.
+
+**Alternatives.** A reserved `else` field in `match`'s handler record: a name-directed rule in the checker,
+which §1 rules out, and it would forbid a variant with an alternative `#else`. A shape-based `{x body}` default
+in `!case` without keywords: a two-part clause written by mistake would become a silent default.
+
+**Cost.** A `!case` with `else` no longer reports a forgotten alternative, by design. A misspelled alternative
+in its other clauses is still an error when the variant is known, but in a polymorphic function it widens the
+accepted variants instead.
 
 ## Known limitations
 

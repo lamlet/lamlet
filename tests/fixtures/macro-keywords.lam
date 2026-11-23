@@ -1,0 +1,17 @@
+$[Import* std]
+A macro may list keywords before its clauses: in a pattern, a keyword matches only the same identifier, so
+clauses can tell `{!range 1 to 5}` from `{!range 1 below 5}`.
+$[Macro !range [to below]
+    {{a to b} {range a {+ b 1}}}
+    {{a below b} {range a b}}]
+${!range 1 to 3}
+expect: [1, 2, 3]
+${!range 1 below 3}
+expect: [1, 2]
+A keyword is not a pattern variable, and a template may use the same word as an ordinary name.
+$[# to 10]
+$[Macro !upto [to] {{to n} {range 0 n}}]
+${!upto to 2}
+expect: [0, 1]
+$to
+expect: 10

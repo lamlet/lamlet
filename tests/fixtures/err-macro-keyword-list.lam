@@ -1,0 +1,3 @@
+$[Import* std]
+$[Macro !m [else 3] {{x} x}]
+expect-error: syntax: a macro's keyword list `[...]` holds word identifiers

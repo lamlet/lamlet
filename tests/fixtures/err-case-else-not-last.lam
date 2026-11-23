@@ -1,0 +1,4 @@
+$[Import* std]
+`else` must be the last clause.
+${!case {#a 1} {else 0} {a x x}}
+expect-error: syntax: no clause of `!case` matches this use

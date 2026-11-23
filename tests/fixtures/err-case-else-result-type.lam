@@ -1,0 +1,4 @@
+$[Import* std]
+The `else` body has the same type as the other clauses.
+${!case {#a 1} {a x x} {else "none"}}
+expect-error: type: type mismatch

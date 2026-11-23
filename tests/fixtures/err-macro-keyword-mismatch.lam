@@ -1,0 +1,4 @@
+$[Import* std]
+$[Macro !range [to below] {{a to b} {range a {+ b 1}}}]
+${!range 1 till 3}
+expect-error: syntax: no clause of `!range` matches this use

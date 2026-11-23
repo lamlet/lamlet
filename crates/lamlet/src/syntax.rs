@@ -11,6 +11,7 @@
 
 use crate::source::{is_word_continue, is_word_start, syntax_err, DResult, RegionKind, Span};
 use std::collections::HashMap;
+use std::rc::Rc;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Tok {
@@ -619,6 +620,8 @@ impl Availability {
 pub struct MacroClause {
     pub pattern: Vec<Syntax>,
     pub template: Syntax,
+    /// The macro's keywords (`[Macro !name [else] ...]`): identifiers that match only themselves.
+    pub keywords: Rc<[String]>,
 }
 
 #[derive(Clone, Debug)]
@@ -984,17 +987,39 @@ fn macro_decl(items: &[Syntax], span: Span, doc: Option<String>) -> DResult<Item
         Some(Syntax::Atom(Token { tok: Tok::Macro(p), span })) if p.len() == 1 => (format!("!{}", p[0]), *span),
         other => return syntax_err("expected a macro name such as `!unless`", other.map_or(span, |s| s.span())),
     };
-    if items.len() < 3 {
+    // An optional keyword list, `[else ...]`, comes before the clauses.
+    let (keywords, first) = match items.get(2) {
+        Some(Syntax::Bracket(ks, _, _)) => {
+            let mut keywords: Vec<String> = Vec::new();
+            for k in ks {
+                match k {
+                    Syntax::Atom(Token { tok: Tok::Ident(p), span: kspan })
+                        if p.len() == 1 && !part_is_symbol(p) && !matches!(p[0].as_str(), "_" | "..." | "true" | "false") =>
+                    {
+                        if keywords.contains(&p[0]) {
+                            return syntax_err(format!("keyword `{}` is listed twice", p[0]), *kspan);
+                        }
+                        keywords.push(p[0].clone());
+                    }
+                    other => return syntax_err("a macro's keyword list `[...]` holds word identifiers, such as `[else]`", other.span()),
+                }
+            }
+            (keywords, 3)
+        }
+        _ => (Vec::new(), 2),
+    };
+    let keywords: Rc<[String]> = Rc::from(keywords);
+    if items.len() <= first {
         return syntax_err("a macro needs at least one `{pattern template}` clause", span);
     }
     let mut clauses = Vec::new();
-    for c in &items[2..] {
+    for c in &items[first..] {
         match c {
             Syntax::Brace(parts, cspan) if parts.len() == 2 => match &parts[0] {
                 Syntax::Brace(pattern, _) => {
                     let mut vars = Vec::new();
-                    check_pattern(pattern, &mut vars)?;
-                    clauses.push(MacroClause { pattern: pattern.clone(), template: parts[1].clone() });
+                    check_pattern(pattern, &keywords, &mut vars)?;
+                    clauses.push(MacroClause { pattern: pattern.clone(), template: parts[1].clone(), keywords: keywords.clone() });
                 }
                 other => return syntax_err("a macro pattern is a `{...}` list of operand patterns", other.span()),
             },
@@ -1009,8 +1034,9 @@ fn macro_decl(items: &[Syntax], span: Span, doc: Option<String>) -> DResult<Item
     Ok(Item::Decls(vec![Decl::Macro { name, name_span, clauses, span, doc }]))
 }
 
-/// Validate a pattern list: at most one `...` per list, following an element; variables are unique.
-fn check_pattern(items: &[Syntax], vars: &mut Vec<String>) -> DResult<()> {
+/// Validate a pattern list: at most one `...` per list, following an element; variables are unique. Keywords
+/// are not variables.
+fn check_pattern(items: &[Syntax], keywords: &[String], vars: &mut Vec<String>) -> DResult<()> {
     let mut seen_ellipsis = false;
     for (i, p) in items.iter().enumerate() {
         if p.is_ellipsis() {
@@ -1029,7 +1055,7 @@ fn check_pattern(items: &[Syntax], vars: &mut Vec<String>) -> DResult<()> {
                     return syntax_err("pattern variables are unqualified identifiers", *span);
                 }
                 let v = &parts[0];
-                if v != "_" && v != "true" && v != "false" {
+                if v != "_" && v != "true" && v != "false" && !keywords.contains(v) {
                     if vars.contains(v) {
                         return syntax_err(format!("pattern variable `{}` appears twice", v), *span);
                     }
@@ -1038,7 +1064,7 @@ fn check_pattern(items: &[Syntax], vars: &mut Vec<String>) -> DResult<()> {
             }
             Syntax::Atom(Token { tok: Tok::Macro(_), span }) => return syntax_err("a macro name cannot appear in a pattern", *span),
             Syntax::Atom(_) => {}
-            Syntax::Brace(xs, _) | Syntax::Bracket(xs, _, _) => check_pattern(xs, vars)?,
+            Syntax::Brace(xs, _) | Syntax::Bracket(xs, _, _) => check_pattern(xs, keywords, vars)?,
         }
     }
     Ok(())
@@ -1236,36 +1262,41 @@ fn atom_eq(a: &Tok, b: &Tok) -> bool {
 
 /// Match operands against a clause's pattern list.
 pub fn match_clause(pattern: &[Syntax], operands: &[Syntax]) -> Option<Bindings> {
+    match_clause_with(pattern, &[], operands)
+}
+
+/// Match operands against a pattern list in which `keywords` match only an identical identifier.
+pub fn match_clause_with(pattern: &[Syntax], keywords: &[String], operands: &[Syntax]) -> Option<Bindings> {
     let mut b = HashMap::new();
-    if match_list(pattern, operands, &mut b) {
+    if match_list(pattern, keywords, operands, &mut b) {
         Some(b)
     } else {
         None
     }
 }
 
-fn match_list(pats: &[Syntax], items: &[Syntax], b: &mut Bindings) -> bool {
+fn match_list(pats: &[Syntax], kw: &[String], items: &[Syntax], b: &mut Bindings) -> bool {
     let ell = pats.iter().position(|p| p.is_ellipsis());
     match ell {
-        None => pats.len() == items.len() && pats.iter().zip(items).all(|(p, s)| match_one(p, s, b)),
+        None => pats.len() == items.len() && pats.iter().zip(items).all(|(p, s)| match_one(p, kw, s, b)),
         Some(e) => {
             let (before, rep, after) = (&pats[..e - 1], &pats[e - 1], &pats[e + 1..]);
             if items.len() < before.len() + after.len() {
                 return false;
             }
             let mid_end = items.len() - after.len();
-            if !before.iter().zip(&items[..before.len()]).all(|(p, s)| match_one(p, s, b)) {
+            if !before.iter().zip(&items[..before.len()]).all(|(p, s)| match_one(p, kw, s, b)) {
                 return false;
             }
-            if !after.iter().zip(&items[mid_end..]).all(|(p, s)| match_one(p, s, b)) {
+            if !after.iter().zip(&items[mid_end..]).all(|(p, s)| match_one(p, kw, s, b)) {
                 return false;
             }
             let mut vars = Vec::new();
-            pattern_vars(rep, &mut vars);
+            pattern_vars(rep, kw, &mut vars);
             let mut seqs: HashMap<String, Vec<MatchBinding>> = vars.iter().map(|v| (v.clone(), Vec::new())).collect();
             for s in &items[before.len()..mid_end] {
                 let mut inner = HashMap::new();
-                if !match_one(rep, s, &mut inner) {
+                if !match_one(rep, kw, s, &mut inner) {
                     return false;
                 }
                 for (k, v) in inner {
@@ -1280,8 +1311,12 @@ fn match_list(pats: &[Syntax], items: &[Syntax], b: &mut Bindings) -> bool {
     }
 }
 
-fn match_one(p: &Syntax, s: &Syntax, b: &mut Bindings) -> bool {
+fn match_one(p: &Syntax, kw: &[String], s: &Syntax, b: &mut Bindings) -> bool {
     match p {
+        // A keyword matches the same unqualified identifier, whatever its hygiene marks.
+        Syntax::Atom(Token { tok: Tok::Ident(parts), .. }) if parts.len() == 1 && kw.contains(&parts[0]) => {
+            matches!(s, Syntax::Atom(Token { tok: Tok::Ident(q), .. }) if q.len() == 1 && base_name(&q[0]) == parts[0])
+        }
         Syntax::Atom(Token { tok: Tok::Ident(parts), .. }) if parts.len() == 1 && parts[0] != "true" && parts[0] != "false" => {
             if parts[0] != "_" {
                 b.insert(parts[0].clone(), MatchBinding::One(s.clone()));
@@ -1289,19 +1324,19 @@ fn match_one(p: &Syntax, s: &Syntax, b: &mut Bindings) -> bool {
             true
         }
         Syntax::Atom(pt) => matches!(s, Syntax::Atom(st) if atom_eq(&pt.tok, &st.tok)),
-        Syntax::Brace(ps, _) => matches!(s, Syntax::Brace(ss, _) if match_list(ps, ss, b)),
-        Syntax::Bracket(ps, _, _) => matches!(s, Syntax::Bracket(ss, _, _) if match_list(ps, ss, b)),
+        Syntax::Brace(ps, _) => matches!(s, Syntax::Brace(ss, _) if match_list(ps, kw, ss, b)),
+        Syntax::Bracket(ps, _, _) => matches!(s, Syntax::Bracket(ss, _, _) if match_list(ps, kw, ss, b)),
     }
 }
 
-fn pattern_vars(p: &Syntax, out: &mut Vec<String>) {
+fn pattern_vars(p: &Syntax, kw: &[String], out: &mut Vec<String>) {
     match p {
         Syntax::Atom(Token { tok: Tok::Ident(parts), .. })
-            if parts.len() == 1 && !matches!(parts[0].as_str(), "_" | "..." | "true" | "false") =>
+            if parts.len() == 1 && !matches!(parts[0].as_str(), "_" | "..." | "true" | "false") && !kw.contains(&parts[0]) =>
         {
             out.push(parts[0].clone())
         }
-        Syntax::Brace(xs, _) | Syntax::Bracket(xs, _, _) => xs.iter().for_each(|x| pattern_vars(x, out)),
+        Syntax::Brace(xs, _) | Syntax::Bracket(xs, _, _) => xs.iter().for_each(|x| pattern_vars(x, kw, out)),
         _ => {}
     }
 }
@@ -1361,7 +1396,7 @@ fn instantiate_list(xs: &[Syntax], b: &Bindings, m: u32) -> Result<Vec<Syntax>, 
     while i < xs.len() {
         if i + 1 < xs.len() && xs[i + 1].is_ellipsis() {
             let mut vars = Vec::new();
-            pattern_vars(&xs[i], &mut vars);
+            pattern_vars(&xs[i], &[], &mut vars);
             let seq: Vec<&String> = vars.iter().filter(|v| matches!(b.get(*v), Some(MatchBinding::Many(_)))).collect();
             if seq.is_empty() {
                 return Err("`...` in a template must follow an element containing a repeated pattern variable".into());
@@ -1548,6 +1583,25 @@ mod tests {
         assert!(match_clause(&trees("x y"), &trees("1")).is_none());
         assert!(match_clause(&trees("x \"lit\""), &trees("1 \"lit\"")).is_some());
         assert!(match_clause(&trees("x \"lit\""), &trees("1 \"other\"")).is_none());
+    }
+
+    #[test]
+    fn keywords_match_only_themselves() {
+        let kw = ["else".to_string()];
+        let pat = trees("v {alt x} ... {else d}");
+        let b = match_clause_with(&pat, &kw, &trees("s {a 1} {else 0}")).unwrap();
+        assert!(!b.contains_key("else") && b.contains_key("d"));
+        assert!(match_clause_with(&pat, &kw, &trees("s {a 1} {other 0}")).is_none());
+        // A marked `else` (from another macro's template) is still `else`.
+        let marked = instantiate(&trees("{else 0}")[0], &Bindings::new(), 3).unwrap();
+        assert!(format!("{:?}", marked).contains("else\\u{1}3"));
+        assert!(match_clause_with(&pat, &kw, &[trees("s")[0].clone(), marked]).is_some());
+        // Without the keyword list, `else` is an ordinary variable.
+        assert!(match_clause(&pat, &trees("s {other 0}")).is_some());
+        assert!(parse("[Macro !m [else] {{x else} x}]").is_ok());
+        assert!(parse("[Macro !m [else else] {{x} x}]").is_err());
+        assert!(parse("[Macro !m [\"else\"] {{x} x}]").is_err());
+        assert!(parse("[Macro !m [else]]").is_err());
     }
 
     #[test]

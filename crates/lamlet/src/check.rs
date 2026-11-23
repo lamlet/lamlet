@@ -232,6 +232,7 @@ impl Session {
             let typing = match b.info().typing {
                 builtins::Typing::Scheme(s) => s.to_string(),
                 builtins::Typing::Match => "match".to_string(),
+                builtins::Typing::MatchElse => "matchElse".to_string(),
             };
             fingerprint.push_str(&format!("{} {} {}\n", b.name(), typing, b.info().arity));
         }
@@ -1153,7 +1154,7 @@ impl<'s> Checker<'s> {
             return Err(derr(DiagKind::Limit, "macro expansion budget exceeded", span));
         }
         for clause in &mac.clauses {
-            if let Some(bindings) = syntax::match_clause(&clause.pattern, operands) {
+            if let Some(bindings) = syntax::match_clause_with(&clause.pattern, &clause.keywords, operands) {
                 let m = self.s.marks.len() as u32;
                 self.s.marks.push(mac.clone());
                 let note = |d: Diagnostic| d.note(format!("in the expansion of `{}`", shown), Some(span));

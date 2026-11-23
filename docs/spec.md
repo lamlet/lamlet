@@ -76,7 +76,7 @@ A bracket form's head is a keyword from a closed set. It is never a binding and 
 | `[Native x T "id" Pure\|Static\|Runtime]` | declaration | definition context | no | `x` | compile | `T`, as if written `[% T]` |
 | `[NativeType x "id"]` | declaration | definition context | no | `x : Type` | compile | no |
 | `[Type {T a...} roll unroll e]`, `[Type T roll unroll e]` | declaration | definition context | no | `T`, `roll`, `unroll` | compile | `e`, as if written `[% e]` (§4.4) |
-| `[Macro !m {pattern template}...]` | declaration | definition context | no | `!m` | compile | no (syntax) |
+| `[Macro !m [kw...]? {pattern template}...]` | declaration | definition context | no | `!m` | compile | no (syntax) |
 | `[% e]` | stage boundary | expression | yes | no | static | `e`, during checking |
 
 Why these need special syntax:
@@ -123,6 +123,7 @@ Scoping rules:
 | `{!if c a b}` (std macro) | `K::caseBool(c, λ().a, λ().b)` |
 | `{!and ...}`, `{!or ...}` | nested `!if` |
 | `{!case v {a x ea} ...}` (std macro) | `K::match(v, {. a λ(x).ea ...})` |
+| `{!case v {a x ea} ... {else d}}` | `K::matchElse(v, {. a λ(x).ea ...}, λ(_).d)` |
 | `{!assert a b}` | `[% {assertEqual a b}]` |
 | `f"{a $x b}"` | `K::stringAppend` chain over literal text and `K::scalarString(x)` (§2.7) |
 | `{: e T}` | `e`, after checking against the value of `[% T]` |
@@ -289,7 +290,13 @@ These are first-class functions. Each label `l` determines one value:
 .l=  : ∀ r a.   (r has .l: a) ⇒ Fn([r, a], r)
 #l   : ∀ v a.   (v has #l: a) ⇒ Fn([a], v)
 K::match : ∀ v h r ε. cases(h, r, ε) on v ⇒ Fn([v, h], r) ! ε
+K::matchElse : ∀ v h r ε. some-cases(h, r, ε) on v ⇒ Fn([v, h, Fn([v], r) ! ε], r) ! ε
 ```
+
+`cases` requires the handler record to cover v's alternatives exactly. `some-cases` requires each handler `l` to
+be a one-argument function of the payload of an alternative `#l` of v (it adds `v has #l: τ`), and the default
+receives the whole value. A function using `matchElse` therefore accepts any variant that has its handlers'
+alternatives.
 
 A record literal `{. l1 e1 ... }` has the closed type `{l1: τ1, ...}`.
 
@@ -423,6 +430,9 @@ an ordered list of `{pattern template}` clauses:
 
 - **Matching.** A clause matches identifiers as variables, `_` as anything, literals exactly, nested lists by
   shape, and `p ...` as a repetition.
+- **Keywords.** An optional list of word identifiers before the clauses, `[Macro !case [else] ...]`, names the
+  macro's keywords. In a pattern, a keyword is not a variable: it matches only the same unqualified identifier,
+  whatever its hygiene marks, so clauses can tell `{else d}` from `{x d}`.
 - **Templates.** A template is the clause's syntax with its pattern variables substituted. `t ...` repeats `t`
   once per match of the repeated variables it contains. A *splice group* `{... t1 ... tn}` instantiates
   `t1 ... tn` in place, inside the enclosing list, so `{... t1 t2} ...` repeats two elements together:
@@ -470,6 +480,7 @@ wrappers, and higher-order uses therefore behave identically.
 | `caseBool` | `Fn([Bool, Fn([],a)!e, Fn([],a)!e], a)!e` | Bool is a native representation and needs an eliminator |
 | `nil`, `cons`, `caseList` | List constructors and eliminator | List is the only recursive type; general recursive types are (future) |
 | `match` | see §4.1 | Variant eliminator |
+| `matchElse` | see §4.1 | Variant eliminator with a default; `match` cannot express it, since its handlers must cover the variant exactly |
 | `stringAppend` | `Fn([String,String],String)` | String representation |
 | `stringScalars` | `Fn([String],List(String))` | String representation (Unicode scalars) |
 | `scalarString` | `∀s:Scalar. Fn([s],String)` | Number formatting; dispatches on the runtime representation |

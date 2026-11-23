@@ -387,6 +387,9 @@ pub struct Case {
     pub ret: Ty,
     /// The capability variable shared by every handler.
     pub eff: u32,
+    /// The handlers cover some of the alternatives, and a default covers the rest (`K::matchElse`). Only a
+    /// handler record carries a partial relation: each handler adds its alternative to the variant.
+    pub partial: bool,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -660,7 +663,7 @@ impl TypeCtx {
     }
 
     fn inst_case(&mut self, c: &Case, gen: u32, level: u32, m: &mut InstMaps) -> Case {
-        Case { other: self.inst(&c.other, gen, level, m), ret: self.inst(&c.ret, gen, level, m), eff: self.inst_eff(c.eff, gen, level, m) }
+        Case { other: self.inst(&c.other, gen, level, m), ret: self.inst(&c.ret, gen, level, m), eff: self.inst_eff(c.eff, gen, level, m), partial: c.partial }
     }
 
     fn inst(&mut self, ty: &Ty, gen: u32, level: u32, m: &mut InstMaps) -> Ty {
@@ -957,6 +960,14 @@ impl TypeCtx {
         }
         for case in c.handles {
             match &t {
+                Ty::Record(fields) if case.partial => {
+                    for (n, h) in fields.clone() {
+                        let p = self.fresh(level);
+                        let want = Ty::Fn(Box::new(FnTy { params: vec![p.clone()], ret: case.ret.clone(), eff: case.eff }));
+                        self.unify(&h, &want).map_err(|m| format!("handler `{}` must be a one-argument function: {}", n, m))?;
+                        self.check_cons(&case.other, Cons { alts: vec![(n.clone(), p)], ..Cons::default() }, level)?;
+                    }
+                }
                 Ty::Record(fields) => {
                     let mut alts = Vec::new();
                     for (n, h) in fields.clone() {
@@ -1168,7 +1179,7 @@ mod tests {
         let ret = t.fresh(1);
         let eff = t.fresh_eff(1, 0);
         let v = t.fresh(1);
-        let h = t.fresh_with(1, Cons { handles: vec![Case { other: v.clone(), ret: ret.clone(), eff }], ..Cons::default() });
+        let h = t.fresh_with(1, Cons { handles: vec![Case { other: v.clone(), ret: ret.clone(), eff, partial: false }], ..Cons::default() });
         let handler = Ty::Fn(Box::new(FnTy { params: vec![STRING], ret: INT, eff: t.fresh_eff(1, 0) }));
         t.unify(&h, &Ty::Record(vec![(Rc::from("a"), handler)])).unwrap();
         assert_eq!(t.to_desc(&v), Some(TypeDesc::Variant(vec![(Rc::from("a"), TypeDesc::String)])));

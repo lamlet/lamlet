@@ -187,6 +187,12 @@ $[# {area s} {!case s {circle r {* 3.14 {* r r}}}
                        {rect wh {* {.w wh} {.h wh}}}}]
 ```
 
+A last clause `{else body}` handles every alternative the others do not name, so the variant may have more:
+
+```text
+$[# {radius s} {!case s {circle r r} {else 0.0}}]
+```
+
 Options and pairs are not built in. They are ordinary definitions in std, made from these two forms:
 
 - `some` / `none` build the variant `<none: Unit, some: a>`; `caseOption` and `withDefault` take it apart

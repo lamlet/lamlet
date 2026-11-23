@@ -73,6 +73,7 @@ f"{Hi "$name", ${e}}"   template, a String: text exactly as written up to the fi
 {latex f"{\frac{$a}{2}}"} a formula: std's Latex = {latex: String} (no LaTeX template form)
 [Import p]  [Import* p]  [ImportAs p alias]            imports (lexical, source order)
 [Macro !name {pattern template} ...]                   pattern macro
+[Macro !name [kw ...] {pattern template} ...]          ... whose patterns match the keywords kw literally
 [Native name {Fn {' A B} R} "api.id/x" Pure|Static|Runtime]   typed host function (signature runs as [% …])
 [NativeType Name "type.id"]                            opaque host type
 [Type {T a} rollT unrollT body]  [Type T rollT unrollT body]   iso-recursive type (body runs as [% …]; §3)
@@ -234,6 +235,9 @@ These are the only primitive ways to inspect data:
 - `K::match v {. tag1 handler1 tag2 handler2}`: exactly one handler per alternative, and every handler is a
   1-argument function. Unit payloads take `{^ {u} ...}`. The std macro `!case` is the shorter form:
   `{!case v {tag1 x body1} {tag2 y body2}}`.
+- `K::matchElse v handlers default`: handlers for *some* alternatives (each must exist in the variant), and
+  `default` gets the whole value otherwise. In `!case`, a last clause `{else body}`:
+  `{!case shape {circle r r} {else 0.0}}`.
 
 ### 4.4 Staging
 
@@ -260,7 +264,8 @@ native and still be called at runtime. Runtime code may not call `Static` native
   error.
 - **Clauses.** `[Macro !name {pattern template} ...]` tries its clauses in order.
 - **Patterns.** An identifier is a pattern variable, `_` matches anything, literals match exactly, nested lists
-  match by shape, and `p ...` repeats.
+  match by shape, and `p ...` repeats. Keywords listed after the name (`[Macro !case [else] ...]`) match only
+  themselves.
 - **Templates.** `t ...` repeats one element. To repeat several together, use a splice group, which expands in
   place: `{... k {f v}} ...` (std's `!case` builds its handler record this way).
 - **Hygiene.** Names a template introduces resolve where the macro was defined, and binders it introduces cannot

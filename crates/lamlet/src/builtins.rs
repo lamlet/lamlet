@@ -20,6 +20,9 @@ pub enum Typing {
     Scheme(&'static str),
     /// `K::match`: a scheme whose case constraint the scheme syntax cannot write; built by [`match_scheme`].
     Match,
+    /// `K::matchElse`: like `Match`, with a default for the alternatives without a handler; built by
+    /// [`match_else_scheme`].
+    MatchElse,
 }
 
 pub enum Outcome {
@@ -176,6 +179,18 @@ pub static INTRINSICS: &[Intrinsic] = &[
             (x, h) => Err(format!("K::match expects a variant and a handler record, found {} and {}", x.type_name(), h.type_name())),
         },
     },
+    Intrinsic {
+        name: "matchElse",
+        typing: Typing::MatchElse,
+        arity: 3,
+        run: |a| match (&a[0], &a[1]) {
+            (Value::Variant(x), Value::Record(_)) => match a[1].field(&x.0) {
+                Some(h) => Ok(Outcome::Call(h.clone(), vec![x.1.clone()])),
+                None => Ok(Outcome::Call(a[2].clone(), vec![a[0].clone()])),
+            },
+            (x, h) => Err(format!("K::matchElse expects a variant and a handler record, found {} and {}", x.type_name(), h.type_name())),
+        },
+    },
     // Strings.
     intrinsic!("stringAppend", "Fn([String, String], String)", 2, |a| {
         let (x, y) = (str_of(&a[0])?, str_of(&a[1])?);
@@ -219,9 +234,23 @@ pub fn match_scheme(t: &mut TypeCtx) -> Ty {
     let h = t.fresh(GENERIC_LEVEL);
     let (Ty::Var(vi), Ty::Var(hi)) = (&v, &h) else { unreachable!() };
     let (vi, hi) = (*vi, *hi);
-    t.add_cons(vi, Cons { cases: vec![Case { other: h.clone(), ret: r.clone(), eff: e }], ..Cons::default() }).unwrap();
-    t.add_cons(hi, Cons { handles: vec![Case { other: v.clone(), ret: r.clone(), eff: e }], ..Cons::default() }).unwrap();
+    t.add_cons(vi, Cons { cases: vec![Case { other: h.clone(), ret: r.clone(), eff: e, partial: false }], ..Cons::default() }).unwrap();
+    t.add_cons(hi, Cons { handles: vec![Case { other: v.clone(), ret: r.clone(), eff: e, partial: false }], ..Cons::default() }).unwrap();
     Ty::Fn(Box::new(FnTy { params: vec![v, h], ret: r, eff: e }))
+}
+
+/// The scheme of `K::matchElse`: `∀ v h r e. some-cases(h, r, e) on v ⇒ Fn([v, h, Fn([v], r) ! e], r) ! e`.
+/// Each handler `l` requires the alternative `#l` of v; the default receives the whole value.
+pub fn match_else_scheme(t: &mut TypeCtx) -> Ty {
+    let r = t.fresh(GENERIC_LEVEL);
+    let e = t.fresh_eff(GENERIC_LEVEL, 0);
+    let v = t.fresh(GENERIC_LEVEL);
+    let h = t.fresh(GENERIC_LEVEL);
+    let Ty::Var(hi) = &h else { unreachable!() };
+    let hi = *hi;
+    t.add_cons(hi, Cons { handles: vec![Case { other: v.clone(), ret: r.clone(), eff: e, partial: true }], ..Cons::default() }).unwrap();
+    let default = Ty::Fn(Box::new(FnTy { params: vec![v.clone()], ret: r.clone(), eff: e }));
+    Ty::Fn(Box::new(FnTy { params: vec![v, h, default], ret: r, eff: e }))
 }
 
 /// The generic type of a label function.
@@ -300,6 +329,7 @@ pub fn intrinsic_type(b: Builtin, t: &mut TypeCtx) -> Ty {
     match b.info().typing {
         Typing::Scheme(src) => parse_scheme(src, t).unwrap_or_else(|e| panic!("intrinsic K.{}: {}", b.name(), e)),
         Typing::Match => match_scheme(t),
+        Typing::MatchElse => match_else_scheme(t),
     }
 }
 

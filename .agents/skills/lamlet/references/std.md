@@ -93,7 +93,8 @@ Each entry: name, then its doc (which starts with its type when it has one). `_n
 ## 6. Records, variants, options, and pairs
 
 - `match` — Fn([V, H], R). {match v {. a fa b fb}} calls the handler of v's alternative with its payload. The handlers must cover exactly the variant's alternatives.
-- `!case` — {!case v {alt x body} ...}: matches v, binding the payload of each alternative to x in its body. It is {match v {. alt {^ {x} body} ...}}, so the clauses must cover exactly the variant's alternatives. A Unit payload still has a name: {!case o {none u 0} {some x x}}.
+- `matchElse` — Fn([V, H, Fn([V], R)], R). {matchElse v {. a fa} default} calls the handler of v's alternative with its payload, or default with v itself when v's alternative has no handler. Each handler's alternative must be one of v's.
+- `!case` — A last clause {else body} handles every alternative the others do not, which makes it {matchElse v {. alt {^ {x} body} ...} {^ {other} body}}: {!case shape {circle r {* r r}} {else 0.0}}. The other clauses must still name alternatives of the variant.
 - `pair` — Fn([A, B], {first: A, second: B}). A pair is an ordinary record.
 - `first` — Fn([{first: A, ...}], A). The first component of a pair (or any record with a `first` field).
 - `second` — Fn([{second: B, ...}], B). The second component of a pair.
