@@ -45,6 +45,11 @@ must rename it or import std otherwise.
   regions, code fences, and regions with a line comment stay as written. `--check` changes nothing, lists the files
   it would change, and exits with 1 when there is one.
 
+### Fixed
+
+- `lamlet test`: a `!testFails` test whose expression succeeded printed an unfinished message (`expected an error
+  containing "...", but it returned`); it now ends `but it did not fail`.
+
 ## 0.4.1 (2026-11-03)
 
 Tests: a document binds `_tests` with std's `!tests`, and `lamlet test` runs each test on its own. Code fences

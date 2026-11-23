@@ -172,7 +172,7 @@ fn print_text(reports: &[FileReport]) {
                 Outcome::ExpectedError { expected, got } => {
                     println!("  FAIL   {}", name);
                     match got {
-                        None => println!("         expected an error containing {:?}, but it returned", expected),
+                        None => println!("         expected an error containing {:?}, but it did not fail", expected),
                         Some(e) => {
                             println!("         expected an error containing {:?}, got:", expected);
                             println!("{}", indent(&e.render(), "         "));
