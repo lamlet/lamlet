@@ -1,0 +1,3 @@
+$[Import* std]
+${lenght {' 1}}
+expect-error: name: unknown name `lenght` (did you mean `length`?)

@@ -1,0 +1,3 @@
+$[Import* std]
+${.nme {. name "a"}}
+expect-error: type: has no field `nme` (did you mean `name`?)

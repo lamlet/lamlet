@@ -7,20 +7,23 @@ often give the fix.
 | You wrote | Diagnostic | Fix |
 |---|---|---|
 | `{+ 1 2 3}` | `type error: this function expects 2 arguments, but 3 were given` | Operators are binary: `{+ {+ 1 2} 3}`, or `{fold xs 0 +}` |
-| `{+ 1}` | `type error: this function expects 2 arguments, but 1 were given` | No partial application: `{^ {x} {+ 1 x}}` |
+| `{+ 1}` | `type error: this function expects 2 arguments, but 1 was given` | No partial application: `{^ {x} {+ 1 x}}` |
 | `{+ 1 2.0}` | ``type error: argument 2: type mismatch: `Int` versus `Float` `` | Convert explicitly: `{+ {float 1} 2.0}` |
 | `{map {' 1} +}` | `type error: argument 2: arity mismatch: a 1-argument function versus a 2-argument function` | Pass a function of the right arity: `{map xs {^ {x} {+ x 1}}}` |
-| `{{^ {} 1} 2}` | `type error: this function expects 0 arguments, but 1 were given` | Zero-argument functions are called as `{f}` |
+| `{{^ {} 1} 2}` | `type error: this function expects 0 arguments, but 1 was given` | Zero-argument functions are called as `{f}` |
 | `{' 1 "a"}` | ``type error: argument 2: type mismatch: `Int` versus `String` `` | Lists are homogeneous; use a record or variant to mix |
 | `{!if true 1 "s"}` | `type error: both branches must have the same type` | Make both branches the same type |
 | `{= id id}` | ``type error: argument 1: `Fn([a], a)` does not support equality`` | Functions and native values have no equality |
 | `{.missing {. a 1}}` | ``type error: argument 1: record type `{a: Int}` has no field `missing` `` | Check the label; records are closed |
-| `{match {#a 1} {. b ...}}` | ``type error: argument 2: the handlers do not cover exactly the matched alternatives: variant type `<b: a>` has no alternative `#a` `` | Give exactly one handler per alternative |
+| `{.nme {. name "a"}}` | ``type error: argument 1: record type `{name: String}` has no field `nme` (did you mean `name`?)`` | Misspelled names, fields, alternatives, and macros get a suggestion when one is close |
+| `{match {#a 1} {. b ...}}` | ``type error: argument 2: no handler for the alternative `#a` (handle every alternative, or end a `!case` with `{else ...}`)`` | Give exactly one handler per alternative |
+| `{!case s {a x x}}` where `s : <a: Int, b: Int>` | ``type error: no handler for the alternative `#b` of `<a: Int, b: Int>` (handle every alternative, or end a `!case` with `{else ...}`)`` | Add `{b y ...}`, or a last `{else ...}` clause |
+| `{!case s {circel r 1} {else 0}}` | ``type error: handler `circel` matches no alternative of `<circle: Float, dot: Unit>` (did you mean `circle`?)`` | Even with `else`, each clause names an alternative |
 | `{match {#none unit} {. none {^ {} 0} ...}}` | ``type error: argument 2: handler `none` must be a one-argument function: arity mismatch: a 0-argument function versus a 1-argument function`` | Every handler takes the payload, even Unit: `{^ {u} 0}` (or `{!case o {none u 0} ...}`) |
 | `{{^ {f} {pair {f 1} {f "a"}}} id}` | ``type error: argument 1: type mismatch: `Int` versus `String` `` | A lambda parameter has one type (no higher-rank types): let-bind the function, or pass one function per type |
 | `{map xs !if}` | ``syntax error: a macro must be applied: write {!if ...}`` | Macros are not values; wrap the use in a lambda |
 | `[# λ 1]` | ``syntax error: expected a binding name, or a function head `{name params...}` (an unqualified, unreserved identifier)`` | `λ` is reserved (the lambda head, like `^`); rename the binding |
-| A list holding records of different shapes | ``type mismatch: `{age: Int, name: String}` versus `{age: Int, other: Bool}` `` | One element type per list; apply the polymorphic function to each record instead |
+| A list holding records of different shapes | ``type mismatch: `{age: Int, name: String}` versus `{age: Int, other: Bool}` (only the first has the field `name`; only the second has the field `other`)`` | One element type per list; apply the polymorphic function to each record instead |
 | `[# f {^ {n} {f n}}]` | ``name error: unknown name `f` `` | Recursion needs a named lambda: `{^ f {n} {f n}}` |
 | `{if c a b}` | ``name error: unknown name `if` ``, noting that `` `!if` is a macro `` | `{!if c a b}` |
 | `{p.name}` (to read a field) | ``name error: unknown name `name` ``, noting `` to read a field, write `{.name x}` `` | `{.name p}`; `x.f` calls the *function* `f` |

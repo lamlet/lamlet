@@ -147,6 +147,49 @@ impl DiagKind {
     }
 }
 
+/// The candidate closest to a misspelled `name`, if one is close enough to suggest: within an edit distance of
+/// a third of the name's length, so names shorter than three scalars get no suggestion. Private names (`_x`)
+/// are suggested only for private names.
+pub fn closest<'a>(name: &str, candidates: impl IntoIterator<Item = &'a str>) -> Option<&'a str> {
+    let limit = name.trim_start_matches('!').chars().count() / 3;
+    if limit == 0 {
+        return None;
+    }
+    let mut best: Option<(usize, &str)> = None;
+    for c in candidates {
+        if c == name || (c.starts_with('_') && !name.starts_with('_')) {
+            continue;
+        }
+        let d = edit_distance(name, c);
+        if d <= limit && best.is_none_or(|(bd, bc)| d < bd || (d == bd && c < bc)) {
+            best = Some((d, c));
+        }
+    }
+    best.map(|(_, c)| c)
+}
+
+/// Levenshtein distance over Unicode scalars, counting a swap of two neighbours as one edit.
+fn edit_distance(a: &str, b: &str) -> usize {
+    let (a, b): (Vec<char>, Vec<char>) = (a.chars().collect(), b.chars().collect());
+    let mut d = vec![vec![0usize; b.len() + 1]; a.len() + 1];
+    for (i, row) in d.iter_mut().enumerate() {
+        row[0] = i;
+    }
+    for (j, cell) in d[0].iter_mut().enumerate() {
+        *cell = j;
+    }
+    for i in 1..=a.len() {
+        for j in 1..=b.len() {
+            let cost = usize::from(a[i - 1] != b[j - 1]);
+            d[i][j] = (d[i - 1][j] + 1).min(d[i][j - 1] + 1).min(d[i - 1][j - 1] + cost);
+            if i > 1 && j > 1 && a[i - 1] == b[j - 2] && a[i - 2] == b[j - 1] {
+                d[i][j] = d[i][j].min(d[i - 2][j - 2] + 1);
+            }
+        }
+    }
+    d[a.len()][b.len()]
+}
+
 /// A structured diagnostic with an optional primary span and notes (for example a call path).
 #[derive(Clone, Debug)]
 pub struct Diagnostic {

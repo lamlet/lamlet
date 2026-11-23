@@ -1,0 +1,3 @@
+$[Import* std]
+${' {. age 1 name "a"} {. age 2 other true}}
+expect-error: type: (only the first has the field `name`; only the second has the field `other`)

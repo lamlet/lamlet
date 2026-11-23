@@ -781,6 +781,28 @@ impl TypeCtx {
     fn mismatch(&self, a: &Ty, b: &Ty) -> String {
         let names = &mut Names::default();
         let mut m = format!("type mismatch: `{}` versus `{}`", self.show_with(a, names), self.show_with(b, names));
+        let labels = match (self.resolve(a), self.resolve(b)) {
+            (Ty::Record(x), Ty::Record(y)) => Some((x, y, "field", "")),
+            (Ty::Variant(x), Ty::Variant(y)) => Some((x, y, "alternative", "#")),
+            _ => None,
+        };
+        if let Some((x, y, what, mark)) = labels {
+            let only = |p: &[(Rc<str>, Ty)], q: &[(Rc<str>, Ty)]| -> Vec<String> {
+                p.iter().filter(|f| !q.iter().any(|g| g.0 == f.0)).map(|f| format!("`{}{}`", mark, f.0)).collect()
+            };
+            let (ox, oy) = (only(&x, &y), only(&y, &x));
+            let plural = |v: &Vec<String>| if v.len() == 1 { what.to_string() } else { format!("{}s", what) };
+            let mut parts = Vec::new();
+            if !ox.is_empty() {
+                parts.push(format!("only the first has the {} {}", plural(&ox), ox.join(", ")));
+            }
+            if !oy.is_empty() {
+                parts.push(format!("only the second has the {} {}", plural(&oy), oy.join(", ")));
+            }
+            if !parts.is_empty() {
+                m.push_str(&format!(" ({})", parts.join("; ")));
+            }
+        }
         if matches!(a, Ty::Mu(..)) != matches!(b, Ty::Mu(..)) {
             m.push_str(MU_HINT);
         }
@@ -928,7 +950,10 @@ impl TypeCtx {
                         let actual = actual.clone();
                         self.unify(&actual, &fty).map_err(|m| format!("field `{}`: {}", name, m))?
                     }
-                    None => return Err(format!("record type `{}` has no field `{}`", self.show(&t), name)),
+                    None => {
+                        let hint = crate::source::closest(&name, fs.iter().map(|f| &*f.0)).map_or(String::new(), |c| format!(" (did you mean `{}`?)", c));
+                        return Err(format!("record type `{}` has no field `{}`{}", self.show(&t), name, hint));
+                    }
                 },
                 _ => return Err(format!("`{}` is not a record type, so it has no field `{}`{}", self.show(&t), name, mu_hint(&t))),
             }
@@ -940,7 +965,10 @@ impl TypeCtx {
                         let actual = actual.clone();
                         self.unify(&actual, &aty).map_err(|m| format!("alternative `#{}`: {}", name, m))?
                     }
-                    None => return Err(format!("variant type `{}` has no alternative `#{}`", self.show(&t), name)),
+                    None => {
+                        let hint = crate::source::closest(&name, fs.iter().map(|f| &*f.0)).map_or(String::new(), |c| format!(" (did you mean `#{}`?)", c));
+                        return Err(format!("variant type `{}` has no alternative `#{}`{}", self.show(&t), name, hint));
+                    }
                 },
                 _ => return Err(format!("`{}` is not a variant type, so it has no alternative `#{}`{}", self.show(&t), name, mu_hint(&t))),
             }
@@ -948,6 +976,14 @@ impl TypeCtx {
         for case in c.cases {
             match &t {
                 Ty::Variant(alts) => {
+                    // A handler record not yet known is checked when it is (its `handles` relation), which
+                    // reports a missing or extra handler by name.
+                    if let Ty::Var(_) = self.resolve(&case.other) {
+                        continue;
+                    }
+                    if let Ty::Record(fields) = self.resolve(&case.other) {
+                        self.cover_exactly(alts, &fields)?;
+                    }
                     let handlers = Ty::Record(
                         alts.iter()
                             .map(|(n, p)| (n.clone(), Ty::Fn(Box::new(FnTy { params: vec![p.clone()], ret: case.ret.clone(), eff: case.eff }))))
@@ -965,10 +1001,26 @@ impl TypeCtx {
                         let p = self.fresh(level);
                         let want = Ty::Fn(Box::new(FnTy { params: vec![p.clone()], ret: case.ret.clone(), eff: case.eff }));
                         self.unify(&h, &want).map_err(|m| format!("handler `{}` must be a one-argument function: {}", n, m))?;
+                        if let Ty::Variant(alts) = self.resolve(&case.other) {
+                            if !alts.iter().any(|a| a.0 == n) {
+                                let hint = crate::source::closest(&n, alts.iter().map(|a| &*a.0)).map_or(String::new(), |c| format!(" (did you mean `{}`?)", c));
+                                return Err(format!("handler `{}` matches no alternative of `{}`{}", n, self.show(&Ty::Variant(alts)), hint));
+                            }
+                        }
                         self.check_cons(&case.other, Cons { alts: vec![(n.clone(), p)], ..Cons::default() }, level)?;
                     }
                 }
                 Ty::Record(fields) => {
+                    match self.resolve(&case.other) {
+                        Ty::Variant(alts) => self.cover_exactly(&alts, fields)?,
+                        // A variant known so far only by its alternatives must find each among the handlers.
+                        Ty::Var(w) => {
+                            if let Some(a) = self.vars[w as usize].cons.alts.iter().find(|a| !fields.iter().any(|f| f.0 == a.0)) {
+                                return Err(format!("no handler for the alternative `#{}` (handle every alternative, or end a `!case` with `{{else ...}}`)", a.0));
+                            }
+                        }
+                        _ => {}
+                    }
                     let mut alts = Vec::new();
                     for (n, h) in fields.clone() {
                         let p = self.fresh(level);
@@ -980,6 +1032,21 @@ impl TypeCtx {
                 }
                 _ => return Err(format!("the handlers of a match must be a record of functions, not `{}`", self.show(&t))),
             }
+        }
+        Ok(())
+    }
+
+    /// Check that a match's handler record names exactly a variant's alternatives, naming the first difference.
+    fn cover_exactly(&self, alts: &[(Rc<str>, Ty)], fields: &[(Rc<str>, Ty)]) -> TResult<()> {
+        let variant = || self.show(&Ty::Variant(alts.to_vec()));
+        let missing: Vec<String> = alts.iter().filter(|a| !fields.iter().any(|f| f.0 == a.0)).map(|a| format!("`#{}`", a.0)).collect();
+        if let Some(extra) = fields.iter().find(|f| !alts.iter().any(|a| a.0 == f.0)) {
+            let hint = crate::source::closest(&extra.0, alts.iter().map(|a| &*a.0)).map_or(String::new(), |c| format!(" (did you mean `{}`?)", c));
+            return Err(format!("handler `{}` matches no alternative of `{}`{}", extra.0, variant(), hint));
+        }
+        if !missing.is_empty() {
+            let s = if missing.len() == 1 { "" } else { "s" };
+            return Err(format!("no handler for the alternative{} {} of `{}` (handle every alternative, or end a `!case` with `{{else ...}}`)", s, missing.join(", "), variant()));
         }
         Ok(())
     }

@@ -1,0 +1,5 @@
+$[Import* std]
+A `!case` that misses an alternative names it, at the use of `!case`.
+$[# S [% {Variant {' {Field "a" Int} {Field "b" Int}}}]]
+${!case {: {#a 1} S} {a x x}}
+expect-error: type: no handler for the alternative `#b` of `<a: Int, b: Int>`

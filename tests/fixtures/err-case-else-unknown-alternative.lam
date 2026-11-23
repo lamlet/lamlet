@@ -2,4 +2,4 @@ $[Import* std]
 With `else`, the other clauses must still name alternatives of the variant.
 $[# Shape [% {Variant {' {Field "circle" Float} {Field "dot" Unit}}}]]
 ${!case {: {#dot unit} Shape} {square s 1} {else 0}}
-expect-error: type: has no alternative `#square`
+expect-error: type: handler `square` matches no alternative of `<circle: Float, dot: Unit>`

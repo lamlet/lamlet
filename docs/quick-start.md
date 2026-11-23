@@ -61,7 +61,7 @@ ${twice cube two}                 ;; 512
 ```
 
 Lambdas have an **exact arity**. There is no automatic currying or partial application, so `{+ 1}` is a type
-error ("expects 2 arguments, but 1 were given"). Curry explicitly by returning a lambda:
+error ("expects 2 arguments, but 1 was given"). Curry explicitly by returning a lambda:
 
 ```text
 $[# {adder n} {^ {x} {+ x n}}]

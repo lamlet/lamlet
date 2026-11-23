@@ -409,7 +409,10 @@ Rules:
 
 ## 6. Errors
 
-Diagnostics carry a kind, a primary span, and notes. The notes record macro-expansion sites and call stacks.
+Diagnostics carry a kind, a primary span, and notes. The notes record macro-expansion sites and call stacks. An
+error in syntax that a macro template introduced is reported at the macro's use, with the template position as a
+note; an error in an operand keeps the operand's position. A misspelled name, field, alternative, handler, or
+macro gets a suggestion when a visible one is within an edit distance of a third of its length.
 
 | Kind | Raised by |
 |---|---|

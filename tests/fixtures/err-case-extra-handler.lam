@@ -1,0 +1,5 @@
+$[Import* std]
+An extra clause names the handler, and suggests the closest alternative.
+$[# S [% {Variant {' {Field "circle" Float} {Field "dot" Unit}}}]]
+${!case {: {#dot unit} S} {circel r 1} {dot u 0}}
+expect-error: type: handler `circel` matches no alternative of `<circle: Float, dot: Unit>` (did you mean `circle`?)

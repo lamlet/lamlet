@@ -471,7 +471,7 @@ impl<'s> Checker<'s> {
             Some(b) => b,
             None => {
                 let shown = syntax::base_name(first);
-                let mut d = derr(DiagKind::Name, format!("unknown name `{}`", shown), span);
+                let mut d = derr(DiagKind::Name, format!("unknown name `{}`{}", shown, self.suggest(shown)), span);
                 if parts.len() == 1 && !shown.starts_with('!') && self.lookup_key(&format!("!{}", first)).is_some() {
                     d = d.note(format!("`!{}` is a macro: write {{!{} ...}}", shown, shown), None);
                 }
@@ -514,6 +514,14 @@ impl<'s> Checker<'s> {
                 }
             }
         }
+    }
+
+    /// " (did you mean `x`?)" for the visible name closest to a misspelled one, or nothing. Macro names are
+    /// compared with macro names, and names a macro template introduced are skipped.
+    fn suggest(&self, name: &str) -> String {
+        let keys: Vec<&str> = self.scopes.iter().flat_map(|s| s.keys()).filter(|k| syntax::split_mark(k).is_none()).map(|k| k.as_str()).collect();
+        let candidates = keys.into_iter().filter(|k| k.starts_with('!') == name.starts_with('!'));
+        crate::source::closest(name, candidates).map_or(String::new(), |c| format!(" (did you mean `{}`?)", c))
     }
 
     fn lookup_key(&self, key: &str) -> Option<Binding> {
@@ -1144,7 +1152,7 @@ impl<'s> Checker<'s> {
         let mac = match self.lookup(&key, span) {
             Ok(Binding::Macro { mac, .. }) => mac,
             Ok(_) => return Err(derr(DiagKind::Name, format!("`{}` is not a macro", shown), span)),
-            Err(_) => return Err(derr(DiagKind::Name, format!("unknown macro `{}`", shown), span)),
+            Err(_) => return Err(derr(DiagKind::Name, format!("unknown macro `{}`{}", shown, self.suggest(&shown)), span)),
         };
         if self.expand_depth >= MAX_EXPANSION_DEPTH {
             return Err(derr(DiagKind::Limit, format!("macro expansion depth limit ({}) exceeded", MAX_EXPANSION_DEPTH), span));
@@ -1157,7 +1165,24 @@ impl<'s> Checker<'s> {
             if let Some(bindings) = syntax::match_clause_with(&clause.pattern, &clause.keywords, operands) {
                 let m = self.s.marks.len() as u32;
                 self.s.marks.push(mac.clone());
-                let note = |d: Diagnostic| d.note(format!("in the expansion of `{}`", shown), Some(span));
+                // An error in syntax the template introduced is reported at this use, where the user can act on
+                // it, with the template's position as a note; an error in an operand keeps its own position.
+                let note = |mut d: Diagnostic| {
+                    let inside = d.span.is_some_and(|s| s.file == span.file && s.start >= span.start && s.end <= span.end);
+                    if inside {
+                        return d.note(format!("in the expansion of `{}`", shown), Some(span));
+                    }
+                    let at = d.span.replace(span);
+                    // "argument N" would count the template's operands, not the ones written here.
+                    if let Some(rest) = d.message.strip_prefix("argument ") {
+                        if let Some((n, tail)) = rest.split_once(": ") {
+                            if n.bytes().all(|b| b.is_ascii_digit()) {
+                                d.message = tail.to_string();
+                            }
+                        }
+                    }
+                    d.note(format!("in the expansion of `{}`, from this part of its definition", shown), at)
+                };
                 let expanded = syntax::instantiate(&clause.template, &bindings, m)
                     .map_err(|e| note(derr(DiagKind::Syntax, e, clause.template.span())))?;
                 self.s.expansion_nodes += expanded.size();
@@ -1268,7 +1293,13 @@ impl<'s> Checker<'s> {
                     }
                     return Err(derr(
                         DiagKind::Type,
-                        format!("this function expects {} arguments, but {} were given", f.params.len(), args.len()),
+                        format!(
+                            "this function expects {} argument{}, but {} {} given",
+                            f.params.len(),
+                            if f.params.len() == 1 { "" } else { "s" },
+                            args.len(),
+                            if args.len() == 1 { "was" } else { "were" }
+                        ),
                         span,
                     )
                     .note(format!("its type is {}", self.show(&Ty::Fn(f.clone()))), None));

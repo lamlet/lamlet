@@ -181,7 +181,7 @@ fn definition_scope_and_ordering() {
 
 #[test]
 fn exact_arity() {
-    fails_with(&s("${{^ {a b} a} 1}"), DiagKind::Type, "expects 2 arguments, but 1 were given");
+    fails_with(&s("${{^ {a b} a} 1}"), DiagKind::Type, "expects 2 arguments, but 1 was given");
     fails_with(&s("${{^ {} 1} 2}"), DiagKind::Type, "expects 0 arguments");
     fails_with(&s("$[# AGE 21] ${AGE}"), DiagKind::Type, "not callable");
     // A function passed where a different arity is expected is a type error, not a runtime surprise.
@@ -686,13 +686,20 @@ fn source_positions_survive_elaboration() {
     };
     let loc = f.sources.location(f.diagnostics[0].span.unwrap());
     assert_eq!((loc.line, loc.column), (3, 9));
-    // Errors inside an expansion point at the template and note the use site.
+    // An error in syntax a template introduced points at the use site and notes the template.
     let f = match check(&s("$[Macro !bad {{x} {+ x \"s\"}}]\n${!bad 1}")) {
         Err(f) => f,
         Ok(_) => panic!(),
     };
     let text = f.render();
-    assert!(text.contains("<test>:2:24") && text.contains("in the expansion of `!bad` (at <test>:3:2)"), "{}", text);
+    assert!(text.starts_with("<test>:3:2:") && text.contains("in the expansion of `!bad`, from this part of its definition (at <test>:2:24)"), "{}", text);
+    // An error in an operand keeps the operand's position.
+    let f = match check(&s("$[Macro !twice {{x} {+ x x}}]\n${!twice \"s\"}")) {
+        Err(f) => f,
+        Ok(_) => panic!(),
+    };
+    let text = f.render();
+    assert!(text.starts_with("<test>:3:10:") && text.contains("in the expansion of `!twice` (at <test>:3:2)"), "{}", text);
     // Runtime errors carry the call stack with source positions.
     let (_, m) = fails(&s("$[# inner {^ {} [# x {error \"boom\"}] x}]\n$[# outer {^ {} [# y {inner}] y}]\n${outer}"));
     assert!(m.contains("boom") && m.contains("in inner") && m.contains("in outer"), "{}", m);

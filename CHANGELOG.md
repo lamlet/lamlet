@@ -26,6 +26,15 @@ must rename it or import std otherwise.
 - Macro keywords: `[Macro !name [kw ...] {pattern template} ...]`. In a pattern, a keyword matches only the
   same identifier instead of binding a variable.
 
+### Changed
+
+- Clearer diagnostics. A `match` or `!case` that misses an alternative says which one (`no handler for the
+  alternative #b of ...`), and an extra handler is named. Misspelled names, fields, alternatives, handlers, and
+  macros get a suggestion (`unknown name lenght (did you mean length?)`). A mismatch between two record or two
+  variant types lists the labels only one of them has. An error in syntax a macro template introduced is
+  reported at the macro's use (with the template position as a note) instead of inside the macro's definition,
+  so a `!case` mistake points at your code, not at std. Arity errors use the singular for one argument.
+
 - `lamlet fmt FILE... [--check] [--width N]` lays out the code of documents in place, and `format::format_document`
   (with `format::Style`) is the same for hosts. An expression that fits in the width (100 columns) stays on one
   line; a longer one breaks Lisp-style, one part per line at a 4-space indent from its line's indent, with its
