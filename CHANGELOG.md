@@ -6,6 +6,8 @@ bytecode version (`BYTECODE_VERSION`) are tracked separately from the crate vers
 
 ## Unreleased
 
+## 0.4.3 (2026-11-23)
+
 std gains list and text helpers, and `matchElse`. A document that imports `std` with `Import*` and defines one of the new names
 itself (`count`, `indexed`, `partition`, `sort`, `sortBy`, `find`, `findIndex`, `lookup`, `startsWith`,
 `endsWith`, `indexOf`, `replace`, `trim`, `trimStart`, `trimEnd`, `repeat`, `padStart`, `padEnd`, `parseInt`,
@@ -35,6 +37,18 @@ must rename it or import std otherwise.
   reported at the macro's use (with the template position as a note) instead of inside the macro's definition,
   so a `!case` mistake points at your code, not at std. Arity errors use the singular for one argument.
 
+### Fixed
+
+- `lamlet test`: a `!testFails` test whose expression succeeded printed an unfinished message (`expected an error
+  containing "...", but it returned`); it now ends `but it did not fail`.
+
+## 0.4.2 (2026-11-05)
+
+Note: the `v0.4.2` tag was created for this change, but its `Cargo.toml` version stayed at `0.4.1`; the
+crate version catches up in 0.4.3.
+
+### Added
+
 - `lamlet fmt FILE... [--check] [--width N]` lays out the code of documents in place, and `format::format_document`
   (with `format::Style`) is the same for hosts. An expression that fits in the width (100 columns) stays on one
   line; a longer one breaks Lisp-style, one part per line at a 4-space indent from its line's indent, with its
@@ -44,11 +58,6 @@ must rename it or import std otherwise.
   expression. Only whitespace inside `${...}` and `$[...]` changes; prose, `$name` and template regions, disabled
   regions, code fences, and regions with a line comment stay as written. `--check` changes nothing, lists the files
   it would change, and exits with 1 when there is one.
-
-### Fixed
-
-- `lamlet test`: a `!testFails` test whose expression succeeded printed an unfinished message (`expected an error
-  containing "...", but it returned`); it now ends `but it did not fail`.
 
 ## 0.4.1 (2026-11-03)
 
